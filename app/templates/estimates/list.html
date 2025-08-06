@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Estimates</h2>
+<table class="table">
+  <thead>
+    <tr><th>ID</th><th>Customer</th><th>Total</th><th>Actions</th></tr>
+  </thead>
+  <tbody>
+    {% for e in estimates %}
+    <tr>
+      <td>{{ e.id }}</td>
+      <td>{{ e.customer_name }}</td>
+      <td>${{ e.total }}</td>
+      <td>
+        <a href="{{ url_for('estimates.view_estimate', estimate_id=e.id) }}" class="btn btn-sm btn-primary">View</a>
+        <form action="{{ url_for('estimates.delete_estimate', estimate_id=e.id) }}"
+              method="post" style="display:inline"
+              onsubmit="return confirm('Delete this estimate?');">
+          <button class="btn btn-sm btn-danger">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

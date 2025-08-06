@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Welcome — Quoting Tool{% endblock %}
+{% block content %}
+<div class="text-center mt-5">
+  <h1>Welcome to the Quoting Tool</h1>
+  <p>
+    <a href="{{ url_for('estimates.list_estimates') }}" class="btn btn-primary">
+      View Estimates
+    </a>
+    <a href="{{ url_for('bundles.list_bundles') }}" class="btn btn-secondary">
+      Manage Bundles
+    </a>
+  </p>
+</div>
+{% endblock %}

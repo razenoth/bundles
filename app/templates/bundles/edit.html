@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Edit Bundle</h2>
+
+<form method="post"
+      action="{{ url_for('bundles.edit_bundle', bundle_id=bundle.id) }}"
+      class="mb-4">
+  <div class="mb-3">
+    <label for="bundle-name" class="form-label">Bundle Name</label>
+    <input type="text" id="bundle-name" name="name"
+           class="form-control" value="{{ bundle.name }}" required>
+  </div>
+  <div class="mb-3">
+    <label for="bundle-description" class="form-label">Bundle Description</label>
+    <textarea id="bundle-description" name="description"
+              class="form-control">{{ bundle.description }}</textarea>
+  </div>
+  <button type="submit" class="btn btn-primary">Save Bundle</button>
+</form>
+
+<div class="mb-4 position-relative">
+  <label for="item-search" class="form-label">Add Items</label>
+  <input id="item-search" class="form-control" placeholder="Search products...">
+  <ul id="search-results"
+      class="list-group position-absolute w-100"
+      style="z-index:1000;"></ul>
+</div>
+
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th style="width:25%">Product</th>
+      <th style="width:45%">Description</th>
+      <th style="width:10%">Qty</th>
+      <th style="width:10%">Cost</th>
+      <th style="width:10%">Retail</th>
+      <th style="width:10%">Actions</th>
+    </tr>
+  </thead>
+  <tbody id="bundle-items" data-bundle-id="{{ bundle.id }}">
+    {% for item in bundle.items %}
+    <tr data-item-id="{{ item.id }}">
+      <td>
+        <input type="text" name="product_name" class="form-control"
+               value="{{ item.product_name }}">
+      </td>
+      <td>
+        <input type="text" name="description" class="form-control"
+               value="{{ item.description }}">
+      </td>
+      <td>
+        <input type="number" name="quantity" class="form-control"
+               min="0" value="{{ item.quantity }}">
+      </td>
+      <td>
+        <input type="text" name="cost" class="form-control"
+               value="{{ "{:.2f}".format(item.cost) }}">
+      </td>
+      <td>
+        <input type="text" name="retail" class="form-control"
+               value="{{ "{:.2f}".format(item.retail) }}">
+      </td>
+      <td>
+        <button class="btn btn-sm btn-danger remove-item">Remove</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="mt-4">
+  <p><strong>Total Cost:</strong> $<span id="total-cost">{{ "{:.2f}".format(total_cost) }}</span></p>
+  <p><strong>Total Retail:</strong> $<span id="total-retail">{{ "{:.2f}".format(total_retail) }}</span></p>
+  <p><strong>Markup %:</strong> <span id="markup-percent">
+    {% if total_cost > 0 %}
+      {{ "{:.2f}".format((total_retail - total_cost) / total_cost * 100) }}%
+    {% else %}
+      0.00%
+    {% endif %}
+  </span></p>
+  <p><strong>Profit:</strong> $<span id="profit-amount">{{ "{:.2f}".format(total_retail - total_cost) }}</span></p>
+</div>
+
+<script>
+  const bundleId = {{ bundle.id }};
+</script>
+<script src="{{ url_for('static', filename='js/bundles.js') }}"></script>
+{% endblock %}
