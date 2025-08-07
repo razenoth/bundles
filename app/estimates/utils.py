@@ -1,11 +1,20 @@
 from app.api.repairshopr import get_products, search_customers
 from app.models import EstimateItem
 
-def search_products(q):
-    prods = get_products(q)
+def search_bundles(q: str) -> list:
+    from app.models import Bundle
+    qstr = f"%{q}%"
+    bundles = Bundle.query.filter(Bundle.title.ilike(qstr)).all()
     return [
-        {'id': p['id'], 'name': p['name'], 'unit_price': float(p.get('price', 0)), 'type': 'product'}
-        for p in prods
+        {
+            'id'         : b.id,
+            'name'       : b.title,
+            'description': b.description or '',
+            'cost'       : sum(i.unit_price for i in b.items),
+            'retail'     : sum(i.retail_price for i in b.items),
+            'type'       : 'bundle'
+        }
+        for b in bundles
     ]
 
 def search_customers_util(q):

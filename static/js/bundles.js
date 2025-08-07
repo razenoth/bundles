@@ -45,7 +45,9 @@ document.addEventListener('DOMContentLoaded', () => {
           <li class="list-group-item d-flex justify-content-between align-items-center" data-id="${p.id}">
             <div style="flex:1;">
               <strong>${p.name}</strong><br>
-              ${p.description.substring(0,100)}
+              ${p.description}<br>
+              <small>Cost: $${p.cost.toFixed(2)}</small><br>
+              <small>Retail: $${p.retail.toFixed(2)}</small>
             </div>
             <div class="d-flex align-items-center ms-3">
               <input type="number" class="form-control form-control-sm qty-input"

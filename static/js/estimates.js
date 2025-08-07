@@ -73,9 +73,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const { products } = await res.json();
     psSug.innerHTML = products.map(p => `
       <a href="#" class="list-group-item list-group-item-action"
-         data-id="${p.id}" data-name="${p.name}"
-         data-unit_price="${p.unit_price}">
-        ${p.name}
+         data-id="${p.id}"
+         data-name="${p.name}"
+         data-description="${p.description.replace(/"/g,'&quot;')}"
+         data-unit_price="${p.unit_price}"
+         data-retail="${p.retail}">
+        <strong>${p.name}</strong><br>
+        ${p.description}<br>
+        <small>Cost: $${p.unit_price.toFixed(2)}</small><br>
+        <small>Retail: $${p.retail.toFixed(2)}</small>
       </a>
     `).join('');
   }));
@@ -83,14 +89,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const a = e.target.closest('a');
     if (!a) return;
     e.preventDefault();
-    const data = {
-      id: +a.dataset.id,
-      name: a.dataset.name,
-      type: 'product',
-      unit_price: +a.dataset.unit_price,
-      retail: +a.dataset.unit_price
-    };
-    addItem(data);
+      const data = {
+        id:         +a.dataset.id,
+        name:       a.dataset.name,
+        description:a.dataset.description,
+        type:       'product',
+        quantity:   1,
+        unit_price: +a.dataset.unit_price,
+        retail:     +a.dataset.retail
+      };
+      addItem(data);
     psSug.innerHTML = '';
     psIn.value = '';
   });

@@ -4,8 +4,7 @@ from flask import Blueprint, render_template, request, jsonify, flash, redirect,
 from sqlalchemy.exc import IntegrityError
 from app import db
 from app.models import Bundle, BundleItem
-# from app.bundles.utils import search_products
-from app.api.repairshopr import search_products
+from app.bundles.utils import search_products
 
 bp = Blueprint('bundles', __name__, template_folder='templates/bundles')
 
