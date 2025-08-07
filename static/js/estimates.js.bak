@@ -1,0 +1,187 @@
+// static/js/estimates.js
+document.addEventListener('DOMContentLoaded', () => {
+  const estId = document.querySelector('[data-estimate-id]').dataset.estimateId;
+  let dragSrc = null;
+
+  // debounce helper
+  const debounce = (fn, d=300) => { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),d); }; };
+
+  // --- SEARCH: bundles ---
+  const bsIn = document.getElementById('bundle-search');
+  const bsSug = document.getElementById('bundle-suggestions');
+  bsIn.addEventListener('input', debounce(async ()=> {
+    const q = bsIn.value.trim();
+    if (!q) return bsSug.innerHTML='';
+    const res = await fetch(`/bundles/search-bundles?q=${encodeURIComponent(q)}`);
+    const { bundles } = await res.json();
+    bsSug.innerHTML = bundles.map(b=>`
+      <a href="#" class="list-group-item" data-id="${b.id}" data-name="${b.name}" data-type="bundle">
+        ${b.name}
+      </a>`).join('');
+  }));
+ bsSug.addEventListener('click', e=>{
+    if (!e.target.matches('a')) return;
+    e.preventDefault();
+    const data = { id:+e.target.dataset.id, name:e.target.dataset.name, type:'bundle' };
+    addItem(data);
+    bsSug.innerHTML=''; bsIn.value='';
+  });
+
+  // --- SEARCH: products ---
+  const psIn = document.getElementById('product-search');
+  const psSug = document.getElementById('product-suggestions');
+  psIn.addEventListener('input', debounce(async ()=> {
+    const q = psIn.value.trim();
+    if (!q) return psSug.innerHTML='';
+    const res = await fetch(`/estimates/search?q=${encodeURIComponent(q)}`);
+    const { products } = await res.json();
+    psSug.innerHTML = products.map(p=>`
+      <a href="#" class="list-group-item" data-id="${p.id}" data-name="${p.name}"
+         data-type="product" data-unit_price="${p.unit_price}">
+        ${p.name}
+      </a>`).join('');
+  }));
+  psSug.addEventListener('click', e=>{
+    if (!e.target.matches('a')) return;
+    e.preventDefault();
+    const el = e.target;
+    const data = {
+      id:+el.dataset.id, name:el.dataset.name, type:'product',
+      unit_price: +el.dataset.unit_price, retail:+el.dataset.unit_price
+    };
+    addItem(data);
+    psSug.innerHTML=''; psIn.value='';
+  });
+
+  // --- ADD ITEM common ---
+  async function addItem(data) {
+    if (!estId) return;
+    const res = await fetch(`/estimates/${estId}/add-item`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(data)
+    });
+    if (res.ok) {
+      const row = await buildRow(await res.json(), data);
+      document.getElementById('items-body').appendChild(row);
+      recalc();
+      attachDragHandlers(row);
+    }
+  }
+
+  // --- BUILD a new <tr> for the returned item ---
+  async function buildRow({ item_id }, data) {
+    const tr = document.createElement('tr');
+    tr.classList.add('draggable');
+    tr.draggable = true;
+    tr.dataset.itemId = item_id;
+
+    // drag handle
+    const hd = document.createElement('td'); hd.className='drag-handle'; hd.textContent='☰';
+    tr.appendChild(hd);
+
+    // name, type, qty, cost, retail, total, remove cells
+    ['name','type','quantity','unit_price','retail'].forEach((field,i)=>{
+      const td = document.createElement('td');
+      if (field==='quantity'||field==='unit_price'||field==='retail') {
+        const inp = document.createElement('input');
+        inp.className = 'form-control '+(field==='quantity'?'qty':field.replace('_','-'));
+        inp.type = 'number';
+        if (field!=='quantity') inp.step='0.01';
+        inp.value = data[field] != null ? data[field] : 1;
+        td.appendChild(inp);
+      } else td.textContent = data[field];
+      tr.appendChild(td);
+    });
+
+    const lt = document.createElement('td');
+    lt.className = 'line-total';
+    lt.textContent = `$${(data.quantity||1)*(data.unit_price||0).toFixed(2)}`;
+    tr.appendChild(lt);
+
+    const ctl = document.createElement('td');
+    if (data.type==='bundle') {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-sm btn-link toggle-bundle';
+      btn.textContent = 'Show/Hide Items';
+      ctl.appendChild(btn);
+    }
+    const rem = document.createElement('button');
+    rem.className = 'btn btn-sm btn-danger remove-item';
+    rem.textContent = '✕';
+    ctl.appendChild(rem);
+    tr.appendChild(ctl);
+
+    return tr;
+  }
+
+  // --- recalc totals ---
+  function recalc() {
+    let cost=0, retail=0;
+    document.querySelectorAll('#items-body tr:not(.bundle-item)').forEach(r=>{
+      const q=+r.querySelector('.qty').value;
+      const u=+r.querySelector('.unit-price').value;
+      const rt=+r.querySelector('.retail').value;
+      cost += q*u;
+      retail += q*rt;
+      r.querySelector('.line-total').textContent = `$${(q*u).toFixed(2)}`;
+    });
+    document.getElementById('total-cost').textContent = `$${cost.toFixed(2)}`;
+    document.getElementById('total-retail').textContent = `$${retail.toFixed(2)}`;
+    document.getElementById('total-profit').textContent = `$${(retail-cost).toFixed(2)}`;
+  }
+
+  // --- inline edit & remove & toggle handlers ---
+  document.getElementById('items-body').addEventListener('click', async e=>{
+    if (e.target.matches('.remove-item')) {
+      const row = e.target.closest('tr');
+      await fetch(`/estimates/${estId}/remove-item/${row.dataset.itemId}`,{method:'POST'});
+      row.remove(); recalc();
+    }
+    if (e.target.matches('.toggle-bundle')) {
+      const parent = e.target.closest('tr').dataset.itemId;
+      document.querySelectorAll(`tr[data-parent-id="${parent}"]`)
+        .forEach(r=> r.style.display = r.style.display==='none'?'' :'none');
+    }
+  });
+  document.getElementById('items-body').addEventListener('change', async e=>{
+    if (!e.target.matches('.qty, .unit-price, .retail')) return;
+    const tr = e.target.closest('tr');
+    const id = tr.dataset.itemId;
+    const data = {
+      quantity: +tr.querySelector('.qty').value,
+      unit_price: +tr.querySelector('.unit-price').value,
+      retail: +tr.querySelector('.retail').value
+    };
+    await fetch(`/estimates/${estId}/update-item/${id}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(data)
+    });
+    recalc();
+  });
+
+  // --- drag and drop ---
+  function attachDragHandlers(row) {
+    row.addEventListener('dragstart', e=>{
+      dragSrc = row;
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragover', e=>{
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    });
+    row.addEventListener('drop', e=>{
+      e.preventDefault();
+      if (dragSrc !== row) {
+        const parent = row.parentNode;
+        parent.insertBefore(dragSrc, row.nextSibling);
+      }
+    });
+  }
+  document.querySelectorAll('#items-body .draggable')
+    .forEach(r=> { attachDragHandlers(r); });
+
+  // initial calc
+  recalc();
+});

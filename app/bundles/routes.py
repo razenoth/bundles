@@ -49,7 +49,7 @@ def edit_bundle(bundle_id):
         return redirect(url_for('bundles.edit_bundle', bundle_id=bundle.id))
 
     # GET: render edit page with totals
-    total_cost   = sum(i.cost * i.quantity   for i in bundle.items)
+    total_cost   = sum(i.unit_price * i.quantity   for i in bundle.items)
     total_retail = sum(i.retail * i.quantity for i in bundle.items)
     return render_template(
         'bundles/edit.html',
@@ -96,7 +96,7 @@ def add_bundle_item(bundle_id):
         product_name = prod['name'],
         description  = prod['description'],
         quantity     = data.get('quantity', 1),
-        cost         = prod.get('cost', 0),
+        unit_price   = prod.get('cost', 0),
         retail       = prod.get('retail', 0)
     )
     db.session.add(it)
@@ -115,8 +115,18 @@ def update_bundle_item(bundle_id, item_id):
     data = request.get_json()
     it   = BundleItem.query.get_or_404(item_id)
     it.quantity    = int(data.get('quantity', it.quantity))
-    it.cost        = float(data.get('cost', it.cost))
+    it.unit_price        = float(data.get('cost', it.unit_price))
     it.retail      = float(data.get('retail', it.retail))
     it.description = data.get('description', it.description)
     db.session.commit()
     return jsonify(success=True)
+
+@bp.route('/search-bundles')
+def search_bundles():
+    """
+    AJAX endpoint for saved‐bundle search.
+    Returns JSON: { bundles: [ { id, name }, … ] }
+    """
+    q = request.args.get('q', '').strip()
+    results = Bundle.query.filter(Bundle.name.ilike(f'%{q}%')).all() if q else []
+    return jsonify(bundles=[{'id': b.id, 'name': b.name} for b in results])

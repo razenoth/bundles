@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4" data-estimate-id="{{ estimate.id if estimate else '' }}">
+  <h1>
+    {% if estimate %}Edit Estimate #{{ estimate.id }}
+    {% else %}New Estimate{% endif %}
+  </h1>
+
+  <!-- Customer & status fields omitted for brevity -->
+
+  <hr>
+
+  <!-- Bundle search -->
+  <div class="form-group position-relative">
+    <label for="bundle-search">Add Bundle</label>
+    <input
+      type="text"
+      id="bundle-search"
+      class="form-control"
+      placeholder="Search saved bundles"
+      autocomplete="off"
+    >
+    <div
+      id="bundle-suggestions"
+      class="list-group position-absolute w-100"
+      style="z-index:1000;"
+    ></div>
+  </div>
+
+  <!-- Product search -->
+  <div class="form-group position-relative">
+    <label for="product-search">Add Product</label>
+    <input type="text" id="product-search" class="form-control"
+           placeholder="Search RepairShopr products" autocomplete="off">
+    <div id="product-suggestions" class="list-group"></div>
+  </div>
+
+  <!-- Line items with drag-and-drop -->
+  <table class="table table-bordered mt-3" id="items-table">
+    <thead>
+      <tr>
+        <th></th>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Qty</th>
+        <th>Cost</th>
+        <th>Retail</th>
+        <th>Line Total</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="items-body">
+      {% if estimate %}
+        {% for it in estimate.items %}
+        <tr data-item-id="{{ it.id }}" class="draggable">
+          <td class="drag-handle">☰</td>
+          <td>{{ it.name }}</td>
+          <td>{{ it.type }}</td>
+          <td><input type="number" class="form-control qty" value="{{ it.quantity }}"></td>
+          <td><input type="number" class="form-control unit-price" step="0.01" value="{{ it.unit_price }}"></td>
+          <td><input type="number" class="form-control retail" step="0.01" value="{{ it.retail }}"></td>
+          <td class="line-total">${{ '%.2f'|format(it.quantity * it.unit_price) }}</td>
+          <td>
+            {% if it.type=='bundle' %}
+            <button class="btn btn-sm btn-link toggle-bundle">Show/Hide Items</button>
+            {% endif %}
+            <button class="btn btn-sm btn-danger remove-item">✕</button>
+          </td>
+        </tr>
+        {% if it.type=='bundle' %}
+        {% for sub in it.bundle_items %}
+        <tr data-parent-id="{{ it.id }}" class="bundle-item draggable">
+          <td class="drag-handle">☰</td>
+          <td class="pl-4">{{ sub.name }}</td>
+          <td>item</td>
+          <td><input type="number" class="form-control qty" value="{{ sub.quantity }}"></td>
+          <td><input type="number" class="form-control unit-price" step="0.01" value="{{ sub.unit_price }}"></td>
+          <td><input type="number" class="form-control retail" step="0.01" value="{{ sub.retail }}"></td>
+          <td class="line-total">${{ '%.2f'|format(sub.quantity * sub.unit_price) }}</td>
+          <td><button class="btn btn-sm btn-danger remove-item">✕</button></td>
+        </tr>
+        {% endfor %}
+        {% endif %}
+        {% endfor %}
+      {% endif %}
+    </tbody>
+    <tfoot>
+      <!-- totals rows unchanged -->
+    </tfoot>
+  </table>
+
+  <!-- Save/Export/Push buttons unchanged -->
+  <div class="mt-3">
+    <button id="save-estimate" class="btn btn-primary">Save Estimate</button>
+    <button id="export-pdf"   class="btn btn-outline-secondary">Export PDF</button>
+    <button id="push-rs"      class="btn btn-outline-info">Push to RepairShopr</button>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/estimates.js') }}"></script>
+{% endblock %}
