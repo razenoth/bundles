@@ -1,11 +1,12 @@
 from flask import Blueprint, render_template, request, jsonify, url_for, redirect, flash
 from app import db
 from app.models import Estimate, EstimateItem, Bundle
-from app.estimates.utils import (
-    search_products,
-    search_customers_util,
-    clone_bundle_to_items
-)
+from app.api.repairshopr import search_products
+# from app.estimates.utils import (
+#     search_products,
+#     search_customers_util,
+#     clone_bundle_to_items
+# )
 
 bp = Blueprint('estimates', __name__)  # will use app/templates/estimates/*.html
 

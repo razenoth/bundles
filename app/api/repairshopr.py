@@ -13,7 +13,7 @@ def get_products(query):
         'Accept': 'application/json'
     }
     try:
-        resp = requests.get(f"{API_URL}/products", params={'search': query}, headers=headers)
+        resp = requests.get(f"{API_URL}/products", params={'query': query}, headers=headers)
         resp.raise_for_status()
         payload = resp.json()
         return payload.get('products', payload)
@@ -25,6 +25,26 @@ def get_products(query):
     except RequestException as e:
         print(f"⚠️ RepairShopr network error: {e}")
     return []
+
+def search_products(query):
+    """
+    Returns a list of dicts with:
+      id, name, description (<=100 chars), price_cost, price_retail
+    """
+    raw = get_products(query) or []
+    out = []
+    for p in raw:
+        desc = (p.get('description') or '').strip()
+        if len(desc) > 100:
+            desc = desc[:100] + '…'
+        out.append({
+            'id':            p['id'],
+            'name':          p.get('name'),
+            'description':   desc, 
+            'price_cost':    float(p.get('price_cost', 0)),    # cost :contentReference[oaicite:1]{index=1}
+            'price_retail':  float(p.get('price_retail', 0))   # retail :contentReference[oaicite:2]{index=2}
+        })
+    return out
 
 def search_customers(query):
     """Search customers by name or email."""
