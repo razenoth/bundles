@@ -11,7 +11,7 @@
   <hr>
 
   <!-- Bundle search -->
-  <div class="form-group position-relative">
+  <div class="mb-4 position-relative">
     <label for="bundle-search">Add Bundle</label>
     <input
       type="text"
@@ -20,19 +20,23 @@
       placeholder="Search saved bundles"
       autocomplete="off"
     >
-    <div
+    <ul
       id="bundle-suggestions"
       class="list-group position-absolute w-100"
       style="z-index:1000;"
-    ></div>
+    ></ul>
   </div>
 
   <!-- Product search -->
-  <div class="form-group position-relative">
+  <div class="mb-4 position-relative">
     <label for="product-search">Add Product</label>
     <input type="text" id="product-search" class="form-control"
            placeholder="Search RepairShopr products" autocomplete="off">
-    <div id="product-suggestions" class="list-group"></div>
+    <ul
+      id="product-suggestions"
+      class="list-group position-absolute w-100"
+      style="z-index:1000;"
+    ></ul>
   </div>
 
   <!-- Line items with drag-and-drop -->

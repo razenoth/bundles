@@ -43,22 +43,46 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const res = await fetch(`/bundles/search-bundles?q=${encodeURIComponent(q)}`);
     const { bundles } = await res.json();
-    bsSug.innerHTML = bundles.map(b => `
-      <a href="#" class="list-group-item list-group-item-action"
-         data-id="${b.id}" data-name="${b.name}">
-        ${b.name}
-      </a>
+    bsSug.innerHTML = bundles.map(p => `
+      <li class="list-group-item d-flex justify-content-between align-items-center"
+          data-id="${p.id}"
+          data-name="${p.name}"
+          data-description="${p.description}"
+          data-unit_price="${p.cost}"
+          data-retail="${p.retail}">
+        <div style="flex:1;">
+          <strong>${p.name}</strong><br>
+          ${p.description}<br>
+          <small>Cost: $${p.cost.toFixed(2)}</small><br>
+          <small>Retail: $${p.retail.toFixed(2)}</small>
+        </div>
+        <div class="d-flex align-items-center ms-3">
+          <input type="number" class="form-control form-control-sm qty-input"
+                 value="1" min="0" style="width:60px;">
+          <button class="btn btn-sm btn-success ms-2 add-btn">Add</button>
+        </div>
+      </li>
     `).join('');
   }));
-  bsSug.addEventListener('click', e => {
-    const a = e.target.closest('a');
-    if (!a) return;
-    e.preventDefault();
-    const data = { id: +a.dataset.id, name: a.dataset.name, type: 'bundle' };
-    addItem(data);
-    bsSug.innerHTML = '';
-    bsIn.value = '';
-  });
+
+// Delegate clicks on the “Add” buttons in your bundle-suggestions <ul>:
+bsSug.addEventListener('click', async e => {
+  if (!e.target.classList.contains('add-btn')) return;
+  const li  = e.target.closest('li');
+  const qty = parseInt(li.querySelector('.qty-input').value, 10) || 1;
+  const data = {
+    id         : +li.dataset.id,
+    name       : li.dataset.name,
+    description: li.dataset.description,
+    unit_price : parseFloat(li.dataset.unit_price),
+    retail     : parseFloat(li.dataset.retail),
+    type       : 'bundle',
+    quantity   : qty
+  };
+  await addItem(data);
+  bsSug.innerHTML = '';
+  bsIn.value     = '';
+});
 
   // --- Product search + delegated click ---
   const psIn  = document.getElementById('product-search');
@@ -71,36 +95,43 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const res = await fetch(`/estimates/search?q=${encodeURIComponent(q)}`);
     const { products } = await res.json();
-    psSug.innerHTML = products.map(p => `
-      <a href="#" class="list-group-item list-group-item-action"
-         data-id="${p.id}"
-         data-name="${p.name}"
-         data-description="${p.description.replace(/"/g,'&quot;')}"
-         data-unit_price="${p.unit_price}"
-         data-retail="${p.retail}">
-        <strong>${p.name}</strong><br>
-        ${p.description}<br>
-        <small>Cost: $${p.unit_price.toFixed(2)}</small><br>
-        <small>Retail: $${p.retail.toFixed(2)}</small>
-      </a>
+  psSug.innerHTML = products.map(p => `
+      <li class="list-group-item d-flex justify-content-between align-items-center"
+          data-id="${p.id}"
+          data-name="${p.name}"
+          data-description="${p.description.replace(/"/g,'&quot;')}"
+          data-unit_price="${p.unit_price}"
+          data-retail="${p.retail}">
+        <div style="flex:1;">
+          <strong>${p.name}</strong><br>
+          ${p.description}<br>
+          <small>Cost: $${p.unit_price.toFixed(2)}</small><br>
+          <small>Retail: $${p.retail.toFixed(2)}</small>
+        </div>
+        <div class="d-flex align-items-center ms-3">
+          <input type="number" class="form-control form-control-sm qty-input"
+                 value="1" min="0" style="width:60px;">
+          <button class="btn btn-sm btn-success ms-2 add-btn">Add</button>
+        </div>
+      </li>
     `).join('');
   }));
-  psSug.addEventListener('click', e => {
-    const a = e.target.closest('a');
-    if (!a) return;
-    e.preventDefault();
-      const data = {
-        id:         +a.dataset.id,
-        name:       a.dataset.name,
-        description:a.dataset.description,
-        type:       'product',
-        quantity:   1,
-        unit_price: +a.dataset.unit_price,
-        retail:     +a.dataset.retail
-      };
-      addItem(data);
+  psSug.addEventListener('click', async e => {
+    if (!e.target.classList.contains('add-btn')) return;
+    const li  = e.target.closest('li');
+    const qty = parseInt(li.querySelector('.qty-input').value, 10) || 1;
+    const data = {
+      id         : +li.dataset.id,
+      name       : li.dataset.name,
+      description: li.dataset.description,
+      unit_price : parseFloat(li.dataset.unit_price),
+      retail     : parseFloat(li.dataset.retail),
+      type       : 'product',
+      quantity   : qty
+    };
+    await addItem(data);
     psSug.innerHTML = '';
-    psIn.value = '';
+    psIn.value     = '';
   });
 
   // --- Add line item via AJAX ---

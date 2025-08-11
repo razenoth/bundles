@@ -124,9 +124,22 @@ def update_bundle_item(bundle_id, item_id):
 @bp.route('/search-bundles')
 def search_bundles():
     """
-    AJAX endpoint for saved‐bundle search.
-    Returns JSON: { bundles: [ { id, name }, … ] }
+    AJAX endpoint for saved-bundle search.
+    Returns JSON: { bundles: [ { id, name, description, cost, retail, type }, … ] }
     """
     q = request.args.get('q', '').strip()
-    results = Bundle.query.filter(Bundle.name.ilike(f'%{q}%')).all() if q else []
-    return jsonify(bundles=[{'id': b.id, 'name': b.name} for b in results])
+    term = f"%{q}%"
+    bundles = Bundle.query.filter(Bundle.name.ilike(term)).all() if q else []
+    results = []
+    for b in bundles:
+        total_cost   = sum(item.unit_price for item in b.items)
+        total_retail = sum(item.retail     for item in b.items)
+        results.append({
+            'id'          : b.id,
+            'name'        : b.name,
+            'description' : (b.description or '')[:100],
+            'cost'        : float(total_cost),
+            'retail'      : float(total_retail),
+            'type'        : 'bundle'
+        })
+    return jsonify(bundles=results)
