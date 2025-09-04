@@ -78,8 +78,10 @@ def init_db() -> None:
         )
         """
     )
-    # Existing installations may lack newer columns; ensure ``disabled`` exists
+    # Existing installations may lack newer columns; ensure they are present
     cols = [r[1] for r in c.execute("PRAGMA table_info(products)")]
+    if "last_seen_at" not in cols:
+        c.execute("ALTER TABLE products ADD COLUMN last_seen_at TEXT")
     if "disabled" not in cols:
         # Add column with default 0 so existing rows are treated as enabled
         c.execute("ALTER TABLE products ADD COLUMN disabled INTEGER DEFAULT 0")
