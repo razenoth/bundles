@@ -78,6 +78,12 @@ def init_db() -> None:
         )
         """
     )
+    # Existing installations may lack newer columns; ensure ``disabled`` exists
+    cols = [r[1] for r in c.execute("PRAGMA table_info(products)")]
+    if "disabled" not in cols:
+        # Add column with default 0 so existing rows are treated as enabled
+        c.execute("ALTER TABLE products ADD COLUMN disabled INTEGER DEFAULT 0")
+
     c.execute("CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_products_upc ON products(upc_code)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_products_name ON products(name)")
