@@ -3,7 +3,7 @@
 
 import os
 import threading
-from flask import Blueprint, jsonify, render_template, request, abort
+from flask import Blueprint, jsonify, render_template, request, abort, current_app
 
 from .inventory_store import get_meta
 from .inventory_sync import full_sync
@@ -36,11 +36,14 @@ def inventory_sync():
     if _sync_running:
         return jsonify(started=False), 409
 
+    app = current_app._get_current_object()
+
     def runner():
         global _sync_running
         _sync_running = True
         try:
-            full_sync()
+            with app.app_context():
+                full_sync()
         finally:
             _sync_running = False
 
