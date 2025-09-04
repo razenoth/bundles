@@ -7,24 +7,52 @@ API_URL = os.getenv('REPAIRSHOPR_API_URL') or \
 API_KEY = os.getenv('REPAIRSHOPR_API_KEY')
 
 def get_products(query):
-    """Returns a list of product dicts from RepairShopr matching `query`."""
+    """Returns a list of product dicts from RepairShopr matching ``query``.
+
+    RepairShopr's product endpoint can search by different fields (name,
+    description, SKU, etc.).  To make our search more forgiving we attempt all
+    of these lookups and merge the unique results.  If one lookup fails we log
+    the error and continue trying the others so a partial failure doesn't
+    prevent returning results.
+    """
     headers = {
         'Authorization': f'Bearer {API_KEY}',
         'Accept': 'application/json'
     }
-    try:
-        resp = requests.get(f"{API_URL}/products", params={'query': query}, headers=headers)
-        resp.raise_for_status()
-        payload = resp.json()
-        return payload.get('products', payload)
-    except HTTPError as e:
-        if e.response.status_code == 401:
-            print("🚨 401 Unauthorized from RepairShopr. Check your API key.")
-        else:
-            print(f"⚠️ RepairShopr API error ({e.response.status_code}): {e}")
-    except RequestException as e:
-        print(f"⚠️ RepairShopr network error: {e}")
-    return []
+
+    results = []
+    seen_ids = set()
+
+    # Try multiple search parameter variations.  The RepairShopr API supports
+    # searching by different fields depending on the parameter name.  We query
+    # several to cover common cases a user may type.
+    param_sets = [
+        {'query': query},        # generic search (usually name)
+        {'name': query},         # explicit name search
+        {'description': query},  # description search
+        {'sku': query},          # SKU lookup
+    ]
+
+    for params in param_sets:
+        try:
+            resp = requests.get(f"{API_URL}/products", params=params, headers=headers)
+            resp.raise_for_status()
+            payload = resp.json()
+            products = payload.get('products', payload) or []
+            for p in products:
+                pid = p.get('id')
+                if pid not in seen_ids:
+                    results.append(p)
+                    seen_ids.add(pid)
+        except HTTPError as e:
+            if e.response.status_code == 401:
+                print("🚨 401 Unauthorized from RepairShopr. Check your API key.")
+            else:
+                print(f"⚠️ RepairShopr API error ({e.response.status_code}): {e}")
+        except RequestException as e:
+            print(f"⚠️ RepairShopr network error: {e}")
+
+    return results
 
 def search_products(query):
     """
