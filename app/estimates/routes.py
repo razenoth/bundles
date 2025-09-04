@@ -63,7 +63,8 @@ def search_for_items():
     Returns { products: [ {id,name,description,unit_price,retail,type}, … ] }.
     """
     q = request.args.get('q', '')
-    prods = search_products(q)
+    page = int(request.args.get('page', 1))
+    prods = search_products(q, page=page)
     return jsonify(products=prods)
 
 

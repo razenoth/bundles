@@ -87,15 +87,18 @@ bsSug.addEventListener('click', async e => {
   // --- Product search + delegated click ---
   const psIn  = document.getElementById('product-search');
   const psSug = document.getElementById('product-suggestions');
-  psIn.addEventListener('input', debounce(async () => {
-    const q = psIn.value.trim();
-    if (!q) {
-      psSug.innerHTML = '';
-      return;
-    }
-    const res = await fetch(`/estimates/search?q=${encodeURIComponent(q)}`);
-    const { products } = await res.json();
-  psSug.innerHTML = products.map(p => `
+  let psPage = 1;
+  let psAbort;
+
+  function psShouldSearch(q) {
+    const isBarcode = /^\d{8,14}$/.test(q);
+    const isSku = /^[\w-]+$/.test(q);
+    return isBarcode || isSku || q.length >= 2;
+  }
+
+  function renderProd(products, reset = true) {
+    if (reset) psSug.innerHTML = '';
+    psSug.innerHTML += products.map(p => `
       <li class="list-group-item d-flex justify-content-between align-items-center"
           data-id="${p.id}"
           data-name="${p.name}"
@@ -115,8 +118,45 @@ bsSug.addEventListener('click', async e => {
         </div>
       </li>
     `).join('');
-  }));
+    if (products.length === 25) {
+      const li = document.createElement('li');
+      li.className = 'list-group-item text-center load-more';
+      li.textContent = 'Load more…';
+      psSug.appendChild(li);
+    }
+  }
+
+  psIn.addEventListener('input', debounce(async () => {
+    const q = psIn.value.trim();
+    if (!q || !psShouldSearch(q)) {
+      psSug.innerHTML = '';
+      return;
+    }
+    psPage = 1;
+    try {
+      if (psAbort) psAbort.abort();
+      psAbort = new AbortController();
+      const res = await fetch(`/estimates/search?q=${encodeURIComponent(q)}&page=${psPage}`, { signal: psAbort.signal });
+      const { products } = await res.json();
+      renderProd(products, true);
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error('Search fetch error:', err);
+        psSug.innerHTML = `<li class="list-group-item text-danger">Error</li>`;
+      }
+    }
+  }, 350));
+
   psSug.addEventListener('click', async e => {
+    if (e.target.classList.contains('load-more')) {
+      const q = psIn.value.trim();
+      e.target.remove();
+      psPage += 1;
+      const res = await fetch(`/estimates/search?q=${encodeURIComponent(q)}&page=${psPage}`);
+      const { products } = await res.json();
+      renderProd(products, false);
+      return;
+    }
     if (!e.target.classList.contains('add-btn')) return;
     const li  = e.target.closest('li');
     const qty = parseInt(li.querySelector('.qty-input').value, 10) || 1;
