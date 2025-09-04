@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block title %}Not Found{% endblock %}
+{% block content %}
+<div class="text-center mt-8">
+  <h1 class="text-2xl mb-4">Page Not Found</h1>
+  <a class="bg-blue-500 text-white px-4 py-2 rounded" href="{{ url_for('estimates.list_estimates') }}">Back to Estimates</a>
+</div>
+{% endblock %}
