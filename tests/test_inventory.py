@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import sqlite3
 
 # Ensure env vars available during module import
 os.environ.setdefault('REPAIRSHOPR_SUBDOMAIN', 'test')
@@ -182,4 +183,36 @@ def test_next_audit_wrap(monkeypatch, tmp_path):
         inventory_sync.quick_update(k_pages=1)
         st = get_sync_state()
         assert st['next_audit_page'] == 1
+
+
+def test_init_db_adds_last_seen_at(tmp_path):
+    app = create_app('development')
+    app.instance_path = str(tmp_path)
+    os.makedirs(app.instance_path, exist_ok=True)
+    db_path = os.path.join(app.instance_path, 'inventory.db')
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+    c.execute(
+        """
+        CREATE TABLE products (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            sku TEXT,
+            upc_code TEXT,
+            category_id INTEGER,
+            price_cents INTEGER,
+            disabled INTEGER,
+            checksum TEXT,
+            raw_json TEXT
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+    with app.app_context():
+        init_db()
+    conn = sqlite3.connect(db_path)
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(products)")]
+    conn.close()
+    assert 'last_seen_at' in cols
 
