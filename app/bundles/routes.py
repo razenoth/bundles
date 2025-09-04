@@ -114,10 +114,11 @@ def remove_bundle_item(bundle_id, item_id):
 def update_bundle_item(bundle_id, item_id):
     data = request.get_json()
     it   = BundleItem.query.get_or_404(item_id)
-    it.quantity    = int(data.get('quantity', it.quantity))
-    it.unit_price        = float(data.get('cost', it.unit_price))
-    it.retail      = float(data.get('retail', it.retail))
-    it.description = data.get('description', it.description)
+    it.quantity     = int(data.get('quantity', it.quantity))
+    it.unit_price   = float(data.get('cost', it.unit_price))
+    it.retail       = float(data.get('retail', it.retail))
+    it.description  = data.get('description', it.description)
+    it.product_name = data.get('product_name', it.product_name)
     db.session.commit()
     return jsonify(success=True)
 

@@ -232,6 +232,7 @@ bsSug.addEventListener('click', async e => {
   const body = document.getElementById('items-body');
   body.addEventListener('click', async e => {
     if (e.target.matches('.remove-item')) {
+      if (!confirm('Remove this item?')) return;
       const row = e.target.closest('tr');
       await fetch(`/estimates/${estId}/remove-item/${row.dataset.itemId}`, { method: 'POST' });
       row.remove();

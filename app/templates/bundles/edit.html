@@ -61,24 +61,56 @@
                value="{{ "{:.2f}".format(item.retail) }}">
       </td>
       <td>
-        <button class="btn btn-sm btn-danger remove-item">Remove</button>
+        <button class="btn btn-sm btn-danger remove-item">&times;</button>
       </td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
 
-<div class="mt-4">
-  <p><strong>Total Cost:</strong> $<span id="total-cost">{{ "{:.2f}".format(total_cost) }}</span></p>
-  <p><strong>Total Retail:</strong> $<span id="total-retail">{{ "{:.2f}".format(total_retail) }}</span></p>
-  <p><strong>Markup %:</strong> <span id="markup-percent">
-    {% if total_cost > 0 %}
-      {{ "{:.2f}".format((total_retail - total_cost) / total_cost * 100) }}%
-    {% else %}
-      0.00%
-    {% endif %}
-  </span></p>
-  <p><strong>Profit:</strong> $<span id="profit-amount">{{ "{:.2f}".format(total_retail - total_cost) }}</span></p>
+<div class="row mt-4" id="bundle-summary">
+  <div class="col-md mb-2">
+    <div class="border rounded p-2 text-center bg-light">
+      <div class="fw-bold">Total Cost</div>
+      <div>$<span id="total-cost">{{ "{:.2f}".format(total_cost) }}</span></div>
+    </div>
+  </div>
+  <div class="col-md mb-2">
+    <div class="border rounded p-2 text-center bg-light">
+      <div class="fw-bold">Total Retail</div>
+      <div>$<span id="total-retail">{{ "{:.2f}".format(total_retail) }}</span></div>
+    </div>
+  </div>
+  <div class="col-md mb-2">
+    <div class="border rounded p-2 text-center bg-light">
+      <div class="fw-bold">Profit</div>
+      <div>$<span id="profit-amount">{{ "{:.2f}".format(total_retail - total_cost) }}</span></div>
+    </div>
+  </div>
+  <div class="col-md mb-2">
+    <div class="border rounded p-2 text-center bg-light">
+      <div class="fw-bold">Margin</div>
+      <div><span id="margin-percent">
+        {% if total_retail > 0 %}
+          {{ "{:.2f}".format((total_retail - total_cost) / total_retail * 100) }}%
+        {% else %}
+          0.00%
+        {% endif %}
+      </span></div>
+    </div>
+  </div>
+  <div class="col-md mb-2">
+    <div class="border rounded p-2 text-center bg-light">
+      <div class="fw-bold">Markup</div>
+      <div><span id="markup-percent">
+        {% if total_cost > 0 %}
+          {{ "{:.2f}".format((total_retail - total_cost) / total_cost * 100) }}%
+        {% else %}
+          0.00%
+        {% endif %}
+      </span></div>
+    </div>
+  </div>
 </div>
 
 <script>
