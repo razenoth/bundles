@@ -53,7 +53,10 @@ def session() -> requests.Session:
     return s
 
 
-def _request(sess: requests.Session, url: str, *, params: dict | None = None) -> dict:
+def _request(
+    sess: requests.Session, url: str, *, params: dict | None = None
+) -> tuple[dict, int, float]:
+    """Perform a GET request with retries and return JSON, status and latency."""
     for attempt in range(3):
         bucket.throttle()
         start = time.monotonic()
@@ -62,10 +65,11 @@ def _request(sess: requests.Session, url: str, *, params: dict | None = None) ->
             latency = (time.monotonic() - start) * 1000
             logging.info("RS %s %s %s %.1fms", url, params, resp.status_code, latency)
             if resp.status_code in {429} or resp.status_code >= 500:
+                # Retryable errors
                 time.sleep(0.5 * (2**attempt) + random.random())
                 continue
             resp.raise_for_status()
-            return resp.json()
+            return resp.json(), resp.status_code, latency
         except requests.RequestException:
             if attempt == 2:
                 raise
@@ -73,13 +77,21 @@ def _request(sess: requests.Session, url: str, *, params: dict | None = None) ->
     raise RuntimeError("API request failed after retries")
 
 
-def fetch_products_page(sess: requests.Session, page: int) -> dict:
-    return _request(sess, f"{API_BASE}/products", params={"page": page})
+def fetch_products_page(
+    sess: requests.Session, page: int
+) -> tuple[list[dict], int, float]:
+    data, status, latency = _request(
+        sess, f"{API_BASE}/products", params={"page": page}
+    )
+    items = data.get("products") or data.get("data") or []
+    return items, status, latency
 
 
 def fetch_product_by_barcode(barcode: str) -> dict | None:
     sess = session()
-    data = _request(sess, f"{API_BASE}/products/barcode", params={"barcode": barcode})
+    data, _, _ = _request(
+        sess, f"{API_BASE}/products/barcode", params={"barcode": barcode}
+    )
     prod = data.get("product") or data.get("data")
     if prod:
         upsert_products([prod])
@@ -88,7 +100,9 @@ def fetch_product_by_barcode(barcode: str) -> dict | None:
 
 def fetch_products_by_sku(sku: str) -> list[dict]:
     sess = session()
-    data = _request(sess, f"{API_BASE}/products", params={"sku": sku, "page": 1})
+    data, _, _ = _request(
+        sess, f"{API_BASE}/products", params={"sku": sku, "page": 1}
+    )
     prods = data.get("products") or data.get("data") or []
     if prods:
         upsert_products(prods)
@@ -97,24 +111,59 @@ def fetch_products_by_sku(sku: str) -> list[dict]:
 
 def fetch_products_query(query: str) -> list[dict]:
     sess = session()
-    data = _request(sess, f"{API_BASE}/products", params={"query": query, "page": 1})
+    data, _, _ = _request(
+        sess, f"{API_BASE}/products", params={"query": query, "page": 1}
+    )
     prods = data.get("products") or data.get("data") or []
     if prods:
         upsert_products(prods)
     return prods
 
 
+PAGE_SIZE = 25
+
+
+def utcnow_iso() -> str:
+    return datetime.utcnow().isoformat() + "Z"
+
+
 def full_sync() -> None:
     """Full refresh of local inventory, safe at <=120 rpm."""
     sess = session()
     page = 1
-    data = fetch_products_page(sess, page)
-    items = data.get("products") or data.get("data") or []
-    total_pages = data.get("total_pages") or (1 if len(items) < 25 else 2)
-    upsert_products(items)
-    while page < total_pages:
-        page += 1
-        data = fetch_products_page(sess, page)
-        items = data.get("products") or data.get("data") or []
-        upsert_products(items)
-    set_meta("inventory_last_synced_at", datetime.utcnow().isoformat() + "Z")
+    total = 0
+    pages_fetched = 0
+    try:
+        while True:
+            items, status, latency = fetch_products_page(sess, page)
+            logging.info(
+                "sync page=%s items=%s total=%s status=%s %.1fms",
+                page,
+                len(items),
+                total + len(items),
+                status,
+                latency,
+            )
+            if not items:
+                break
+            upsert_products(items)
+            total += len(items)
+            pages_fetched = page
+            if len(items) < PAGE_SIZE:
+                break
+            page += 1
+        set_meta("inventory_last_synced_at", utcnow_iso())
+        set_meta("inventory_last_synced_count", str(total))
+        set_meta("inventory_last_error", "")
+        logging.info(
+            "sync completed pages=%s total_items=%s", pages_fetched, total
+        )
+    except Exception as e:  # pragma: no cover - exercised in tests via error handling
+        set_meta(
+            "inventory_last_error",
+            f"{utcnow_iso()} {type(e).__name__}: {e}",
+        )
+        logging.exception("inventory sync failed: %s", e)
+        raise
+    finally:
+        set_meta("inventory_sync_running", "0")

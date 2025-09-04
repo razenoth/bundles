@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
 {% block content %}
 <h1>Inventory Mirror</h1>
-<p>Last DB Pull: <span id="last-sync">{{ last }}</span></p>
-<button id="sync-btn" class="btn btn-primary">Run manual update</button>
+<p>Last DB Pull: <span id="last-sync">{{ last }}</span> (<span id="last-count">{{ count }}</span> items)</p>
+<button id="sync-btn" class="btn btn-primary">Update now</button>
 <button id="csv-btn" class="btn btn-secondary ms-2">Open DB CSV</button>
 <div id="status" class="mt-2"></div>
 
@@ -20,13 +20,18 @@ async function check() {
   const res = await fetch('/admin/inventory/status', {headers:{'X-Admin-Secret':SECRET}});
   const data = await res.json();
   document.getElementById('last-sync').textContent = data.last_synced_at || 'never';
-  if (data.running) {
+  document.getElementById('last-count').textContent = data.last_synced_count || '0';
+  if (data.running === "1") {
     statusEl.textContent = 'Getting information from RepairShopr...';
     btn.disabled = true;
     setTimeout(check, 3000);
   } else {
-    statusEl.textContent = 'Finished fetching.';
     btn.disabled = false;
+    if (data.last_error) {
+      statusEl.textContent = data.last_error;
+    } else {
+      statusEl.textContent = 'Finished fetching.';
+    }
     loadProducts();
   }
 }
