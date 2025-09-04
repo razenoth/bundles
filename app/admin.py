@@ -3,9 +3,20 @@
 
 import os
 import threading
-from flask import Blueprint, jsonify, render_template, request, abort, current_app
+import csv
+import io
+import json
+from flask import (
+    Blueprint,
+    jsonify,
+    render_template,
+    request,
+    abort,
+    current_app,
+    make_response,
+)
 
-from .inventory_store import get_meta, list_products
+from .inventory_store import get_meta, list_products, ro_conn
 from .inventory_sync import full_sync
 
 bp = Blueprint('admin', __name__, template_folder='templates/admin')
@@ -62,3 +73,28 @@ def inventory_products():
     """Expose a subset of the mirrored products for admin inspection."""
     prods = list_products()
     return jsonify(products=prods)
+
+
+@bp.route('/inventory/products.csv')
+def inventory_products_csv():
+    """Download the mirrored products as a CSV file."""
+    with ro_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, name, sku, raw_json FROM products ORDER BY id"
+        ).fetchall()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "name", "sku", "quantity"])
+    for r in rows:
+        raw = json.loads(r["raw_json"] or "{}")
+        qty = (
+            raw.get("quantity_on_hand")
+            or raw.get("quantity")
+            or raw.get("qty")
+            or 0
+        )
+        writer.writerow([r["id"], r["name"], r["sku"], qty])
+    resp = make_response(output.getvalue())
+    resp.headers["Content-Disposition"] = "attachment; filename=inventory.csv"
+    resp.mimetype = "text/csv"
+    return resp
