@@ -112,3 +112,21 @@ def test_admin_sync(monkeypatch, tmp_path):
         time.sleep(0.1)
     assert status['running'] is False
     assert status['last_synced_at'] == 'now'
+
+
+def test_admin_inventory_products(tmp_path):
+    app = make_app(tmp_path)
+    with app.app_context():
+        upsert_products([
+            {
+                'id': 1,
+                'name': 'Gizmo',
+                'price_retail': 1,
+                'price_cost': 0,
+                'quantity': 7,
+            }
+        ])
+    client = app.test_client()
+    res = client.get('/admin/inventory/products', headers={'X-Admin-Secret': 's3cr3t'})
+    data = res.get_json()
+    assert data['products'][0]['quantity'] == 7

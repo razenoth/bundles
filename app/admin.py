@@ -5,7 +5,7 @@ import os
 import threading
 from flask import Blueprint, jsonify, render_template, request, abort, current_app
 
-from .inventory_store import get_meta
+from .inventory_store import get_meta, list_products
 from .inventory_sync import full_sync
 
 bp = Blueprint('admin', __name__, template_folder='templates/admin')
@@ -55,3 +55,10 @@ def inventory_sync():
 def inventory_status():
     last = get_meta('inventory_last_synced_at')
     return jsonify(last_synced_at=last, running=_sync_running)
+
+
+@bp.route('/inventory/products')
+def inventory_products():
+    """Expose a subset of the mirrored products for admin inspection."""
+    prods = list_products()
+    return jsonify(products=prods)
