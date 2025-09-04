@@ -16,8 +16,8 @@ from flask import (
     make_response,
 )
 
-from .inventory_store import get_meta, ro_conn, set_meta
-from .inventory_sync import full_sync
+from .inventory_store import get_sync_state, set_sync_state, ro_conn
+from .inventory_sync import full_sync, quick_update, utcnow_iso
 
 bp = Blueprint('admin', __name__, template_folder='templates/admin')
 
@@ -34,36 +34,72 @@ def before():
 
 @bp.route('/inventory')
 def inventory_page():
-    last = get_meta('inventory_last_synced_at', 'never')
-    count = get_meta('inventory_last_synced_count', '0')
-    return render_template('admin/inventory.html', last=last, count=count, secret=ADMIN_SECRET or '')
+    st = get_sync_state()
+    return render_template(
+        'admin/inventory.html',
+        last_full=st.get('last_full_sync_at', 'never'),
+        last_quick=st.get('last_quick_check_at', 'never'),
+        max_id=st.get('max_product_id_seen', 0),
+        secret=ADMIN_SECRET or '',
+    )
 
 
-@bp.route('/inventory/sync', methods=['POST'])
-def inventory_sync():
-    if get_meta('inventory_sync_running') == '1':
-        return jsonify(started=False), 409
-
-    set_meta('inventory_sync_running', '1')
-
+def _start_background(target):
     app = current_app._get_current_object()
 
     def runner():
         with app.app_context():
-            full_sync()
+            try:
+                result = target()
+                set_sync_state(
+                    {
+                        'inventory_sync_running': 0,
+                        'last_error': None,
+                        'last_job_result': json.dumps(result),
+                    }
+                )
+            except Exception as e:  # pragma: no cover
+                set_sync_state(
+                    {
+                        'inventory_sync_running': 0,
+                        'last_error': f"{utcnow_iso()} {type(e).__name__}: {e}",
+                    }
+                )
+    threading.Thread(target=runner, daemon=False).start()
 
-    threading.Thread(target=runner).start()
+
+@bp.route('/inventory/quick', methods=['POST'])
+def inventory_quick():
+    st = get_sync_state()
+    if st.get('inventory_sync_running'):
+        return jsonify(started=False), 409
+    set_sync_state({'inventory_sync_running': 1})
+    _start_background(quick_update)
+    return jsonify(started=True)
+
+
+@bp.route('/inventory/full', methods=['POST'])
+def inventory_full():
+    st = get_sync_state()
+    if st.get('inventory_sync_running'):
+        return jsonify(started=False), 409
+    set_sync_state({'inventory_sync_running': 1})
+    _start_background(full_sync)
     return jsonify(started=True)
 
 
 @bp.route('/inventory/status')
 def inventory_status():
+    st = get_sync_state()
+    result = st.get('last_job_result')
     return jsonify(
-        running=get_meta('inventory_sync_running', '0'),
-        last_synced_at=get_meta('inventory_last_synced_at'),
-        last_synced_count=get_meta('inventory_last_synced_count'),
-        last_error=get_meta('inventory_last_error'),
-        state=get_meta('inventory_sync_status', 'idle'),
+        running=st.get('inventory_sync_running', 0),
+        last_full_sync_at=st.get('last_full_sync_at'),
+        last_quick_check_at=st.get('last_quick_check_at'),
+        next_audit_page=st.get('next_audit_page'),
+        max_product_id_seen=st.get('max_product_id_seen'),
+        last_error=st.get('last_error'),
+        last_job_result=json.loads(result) if result else None,
     )
 
 

@@ -1,177 +1,111 @@
-# app/inventory_sync.py
-"""Synchronisation helpers for the inventory mirror."""
+"""Inventory synchronisation helpers."""
 
 from __future__ import annotations
 
 import logging
-import os
-import random
-import threading
-import time
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Dict
 
-import requests
-
-from .inventory_store import upsert_products, set_meta
-
-API_BASE = f"https://{os.environ.get('REPAIRSHOPR_SUBDOMAIN')}.repairshopr.com/api/v1"
-API_KEY = os.environ.get('REPAIRSHOPR_API_KEY')
-
-
-class TokenBucket:
-    """Simple token bucket rate limiter."""
-
-    def __init__(self, capacity: int = 120, refill_per_min: int = 120) -> None:
-        self.capacity = capacity
-        self.tokens = capacity
-        self.refill = refill_per_min / 60.0
-        self.t = time.monotonic()
-        self.lock = threading.Lock()
-
-    def throttle(self) -> None:
-        with self.lock:
-            now = time.monotonic()
-            self.tokens = min(self.capacity, self.tokens + (now - self.t) * self.refill)
-            self.t = now
-            if self.tokens >= 1:
-                self.tokens -= 1
-                return
-            wait = (1 - self.tokens) / self.refill
-        time.sleep(wait)
-
-
-bucket = TokenBucket(capacity=120, refill_per_min=120)
-
-
-def session() -> requests.Session:
-    s = requests.Session()
-    s.headers.update({
-        "Authorization": f"Bearer {API_KEY}",
-        "Accept": "application/json",
-    })
-    s.timeout = (3, 10)
-    return s
-
-
-def _request(
-    sess: requests.Session, url: str, *, params: dict | None = None
-) -> tuple[dict, int, float]:
-    """Perform a GET request with retries and return JSON, status and latency."""
-    for attempt in range(3):
-        bucket.throttle()
-        start = time.monotonic()
-        try:
-            resp = sess.get(url, params=params)
-            latency = (time.monotonic() - start) * 1000
-            logging.info("RS %s %s %s %.1fms", url, params, resp.status_code, latency)
-            if resp.status_code in {429} or resp.status_code >= 500:
-                # Retryable errors
-                time.sleep(0.5 * (2**attempt) + random.random())
-                continue
-            resp.raise_for_status()
-            return resp.json(), resp.status_code, latency
-        except requests.RequestException:
-            if attempt == 2:
-                raise
-            time.sleep(0.5 * (2**attempt) + random.random())
-    raise RuntimeError("API request failed after retries")
-
-
-def fetch_products_page(
-    sess: requests.Session, page: int
-) -> tuple[list[dict], int, float]:
-    data, status, latency = _request(
-        sess, f"{API_BASE}/products", params={"page": page}
-    )
-    items = data.get("products") or data.get("data") or []
-    return items, status, latency
-
-
-def fetch_product_by_barcode(barcode: str) -> dict | None:
-    sess = session()
-    data, _, _ = _request(
-        sess, f"{API_BASE}/products/barcode", params={"barcode": barcode}
-    )
-    prod = data.get("product") or data.get("data")
-    if prod:
-        upsert_products([prod])
-    return prod
-
-
-def fetch_products_by_sku(sku: str) -> list[dict]:
-    sess = session()
-    data, _, _ = _request(
-        sess, f"{API_BASE}/products", params={"sku": sku, "page": 1}
-    )
-    prods = data.get("products") or data.get("data") or []
-    if prods:
-        upsert_products(prods)
-    return prods
-
-
-def fetch_products_query(query: str) -> list[dict]:
-    sess = session()
-    data, _, _ = _request(
-        sess, f"{API_BASE}/products", params={"query": query, "page": 1}
-    )
-    prods = data.get("products") or data.get("data") or []
-    if prods:
-        upsert_products(prods)
-    return prods
-
+from .inventory_store import (
+    upsert_products,
+    get_sync_state,
+    set_sync_state,
+    compute_local_checksum,
+)
+from .repairshopr_client import fetch_products_page
 
 PAGE_SIZE = 25
 
 
 def utcnow_iso() -> str:
-    return datetime.utcnow().isoformat() + "Z"
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def full_sync() -> None:
-    """Full refresh of local inventory, safe at <=120 rpm."""
-    sess = session()
+def full_sync(sort: str = "id ASC") -> Dict[str, int]:
+    """Perform a full inventory pull."""
     page = 1
     total = 0
-    pages_fetched = 0
-    requests_made = 0
-    try:
-        while True:
-            set_meta("inventory_sync_status", "fetching")
-            items, status, latency = fetch_products_page(sess, page)
-            logging.info(
-                "sync page=%s items=%s total=%s status=%s %.1fms",
-                page,
-                len(items),
-                total + len(items),
-                status,
-                latency,
-            )
-            if not items:
-                break
-            upsert_products(items)
-            total += len(items)
-            pages_fetched = page
-            requests_made += 1
-            if len(items) < PAGE_SIZE:
-                break
-            page += 1
-            if requests_made % 120 == 0:
-                set_meta("inventory_sync_status", "waiting")
-                time.sleep(60)
-        set_meta("inventory_last_synced_at", utcnow_iso())
-        set_meta("inventory_last_synced_count", str(total))
-        set_meta("inventory_last_error", "")
-        set_meta("inventory_sync_status", "completed")
-        logging.info(
-            "sync completed pages=%s total_items=%s", pages_fetched, total
+    last_page_items = []
+    while True:
+        items = fetch_products_page(page=page, sort=sort)
+        logging.info("full_sync page=%s items=%s", page, len(items))
+        if not items:
+            break
+        upsert_products(items)
+        total += len(items)
+        last_page_items = items
+        if len(items) < PAGE_SIZE:
+            break
+        page += 1
+
+    st = get_sync_state()
+    st["last_full_sync_at"] = utcnow_iso()
+    if total and last_page_items:
+        st["max_product_id_seen"] = max(
+            st.get("max_product_id_seen") or 0, max(p["id"] for p in last_page_items)
         )
-    except Exception as e:  # pragma: no cover - exercised in tests via error handling
-        set_meta(
-            "inventory_last_error",
-            f"{utcnow_iso()} {type(e).__name__}: {e}",
-        )
-        logging.exception("inventory sync failed: %s", e)
-        raise
-    finally:
-        set_meta("inventory_sync_running", "0")
-        set_meta("inventory_sync_status", "completed")
+    set_sync_state(st)
+    logging.info("full_sync completed pages=%s total=%s", page, total)
+    return {"pages": page, "total": total}
+
+
+def quick_update(k_pages: int = 5) -> Dict[str, int]:
+    """Fast delta sync pulling new products and auditing existing ones."""
+    st = get_sync_state()
+    max_known = st.get("max_product_id_seen") or 0
+
+    # --- A) New products
+    new_total = 0
+    page = 1
+    new_items: list = []
+    while True:
+        items = fetch_products_page(page=page, sort="id DESC")
+        logging.info("quick_update new page=%s items=%s", page, len(items))
+        if not items:
+            break
+        min_id = min(p["id"] for p in items)
+        new_items = [p for p in items if p["id"] > max_known]
+        if new_items:
+            upsert_products(new_items)
+            new_total += len(new_items)
+        if min_id <= max_known or len(items) < PAGE_SIZE:
+            break
+        page += 1
+    if new_total and new_items:
+        st["max_product_id_seen"] = max(max_known, max(p["id"] for p in new_items))
+
+    # --- B) Rolling audit
+    updated, checked = 0, 0
+    cursor = max(1, st.get("next_audit_page") or 1)
+    local_page = cursor
+    pages_done = 0
+    while pages_done < k_pages:
+        items = fetch_products_page(page=local_page, sort="id ASC")
+        logging.info("quick_update audit page=%s items=%s", local_page, len(items))
+        if not items:
+            break
+        for p in items:
+            existing = compute_local_checksum(p)
+            if existing != p.get("_local_checksum"):
+                upsert_products([p])
+                updated += 1
+            checked += 1
+        pages_done += 1
+        if len(items) < PAGE_SIZE:
+            local_page = 1
+        else:
+            local_page += 1
+
+    st["next_audit_page"] = local_page
+    st["last_quick_check_at"] = utcnow_iso()
+    set_sync_state(st)
+    logging.info(
+        "quick_update completed new=%s updated=%s checked=%s next_page=%s",
+        new_total,
+        updated,
+        checked,
+        local_page,
+    )
+    return {"new": new_total, "updated": updated, "checked": checked, "next_audit_page": local_page}
+
+
