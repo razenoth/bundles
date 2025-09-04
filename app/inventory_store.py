@@ -170,6 +170,32 @@ def get_meta(key: str, default: str | None = None) -> str | None:
     return default
 
 
+def list_products(limit: int = 50) -> list[dict]:
+    """Return a list of products stored in the mirror database.
+
+    The result includes a ``quantity`` field extracted from the raw JSON
+    payload so admins can verify stock levels after a sync.
+    """
+    with ro_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, name, sku, raw_json FROM products ORDER BY id LIMIT ?",
+            (limit,),
+        ).fetchall()
+    products: list[dict] = []
+    for r in rows:
+        raw = json.loads(r["raw_json"] or "{}")
+        qty = (
+            raw.get("quantity_on_hand")
+            or raw.get("quantity")
+            or raw.get("qty")
+            or 0
+        )
+        products.append(
+            {"id": r["id"], "name": r["name"], "sku": r["sku"], "quantity": qty}
+        )
+    return products
+
+
 def _row_to_product(row: sqlite3.Row) -> dict:
     raw = json.loads(row["raw_json"] or "{}")
     desc = (raw.get("description") or "")[:100]
