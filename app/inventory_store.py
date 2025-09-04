@@ -85,6 +85,8 @@ def init_db() -> None:
     if "disabled" not in cols:
         # Add column with default 0 so existing rows are treated as enabled
         c.execute("ALTER TABLE products ADD COLUMN disabled INTEGER DEFAULT 0")
+    if "checksum" not in cols:
+        c.execute("ALTER TABLE products ADD COLUMN checksum TEXT")
 
     c.execute("CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_products_upc ON products(upc_code)")
