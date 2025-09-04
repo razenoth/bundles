@@ -1,15 +1,19 @@
 # app/estimates/utils.py
 
 from app.inventory_store import search_products as _search_products
-from app import inventory_sync
+from app.repairshopr_client import (
+    fetch_by_barcode,
+    fetch_by_sku,
+    fetch_by_query,
+)
 from app.api.repairshopr import search_customers
 from app.models import Bundle, EstimateItem
 
 
 class RemoteFetch:
-    by_barcode = staticmethod(inventory_sync.fetch_product_by_barcode)
-    by_sku = staticmethod(inventory_sync.fetch_products_by_sku)
-    by_query = staticmethod(inventory_sync.fetch_products_query)
+    by_barcode = staticmethod(fetch_by_barcode)
+    by_sku = staticmethod(fetch_by_sku)
+    by_query = staticmethod(fetch_by_query)
 
 
 def search_products(q: str, page: int = 1) -> list:

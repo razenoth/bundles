@@ -1,50 +1,61 @@
 {% extends 'base.html' %}
 {% block content %}
 <h1>Inventory Mirror</h1>
-<p>Last DB Pull: <span id="last-sync">{{ last }}</span> (<span id="last-count">{{ count }}</span> items)</p>
-<button id="sync-btn" class="btn btn-primary">Update now</button>
-<button id="csv-btn" class="btn btn-secondary ms-2">Open DB CSV</button>
+<p>Last full sync: <span id="last-full">{{ last_full }}</span></p>
+<p>Last quick check: <span id="last-quick">{{ last_quick }}</span></p>
+<p>Max product id: <span id="max-id">{{ max_id }}</span></p>
+<button id="quick-btn" class="btn btn-primary me-2">Quick Update</button>
+<button id="full-btn" class="btn btn-danger me-2">Full Refresh</button>
+<button id="csv-btn" class="btn btn-secondary">Open DB CSV</button>
 <div id="status" class="mt-2"></div>
 <script>
 const SECRET = '{{ secret }}';
-const btn = document.getElementById('sync-btn');
+const quickBtn = document.getElementById('quick-btn');
+const fullBtn = document.getElementById('full-btn');
 const csvBtn = document.getElementById('csv-btn');
 const statusEl = document.getElementById('status');
-async function check() {
+
+async function poll() {
   const res = await fetch('/admin/inventory/status', {headers:{'X-Admin-Secret':SECRET}});
   const data = await res.json();
-  document.getElementById('last-sync').textContent = data.last_synced_at || 'never';
-  document.getElementById('last-count').textContent = data.last_synced_count || '0';
-  if (data.running === "1") {
-    if (data.state === 'waiting') {
-      statusEl.textContent = 'Waiting for rate limit...';
-    } else {
-      statusEl.textContent = 'Getting information from RepairShopr...';
-    }
-    btn.disabled = true;
-    setTimeout(check, 3000);
+  document.getElementById('last-full').textContent = data.last_full_sync_at || 'never';
+  document.getElementById('last-quick').textContent = data.last_quick_check_at || 'never';
+  document.getElementById('max-id').textContent = data.max_product_id_seen || 0;
+  if (data.running) {
+    statusEl.textContent = 'Sync in progress...';
+    quickBtn.disabled = fullBtn.disabled = true;
+    setTimeout(poll, 3000);
   } else {
-    btn.disabled = false;
+    quickBtn.disabled = fullBtn.disabled = false;
     if (data.last_error) {
       statusEl.textContent = data.last_error;
-    } else if (data.state === 'completed') {
-      statusEl.textContent = 'Finished fetching.';
+    } else if (data.last_job_result) {
+      statusEl.textContent = JSON.stringify(data.last_job_result);
     } else {
       statusEl.textContent = '';
     }
   }
 }
-btn.addEventListener('click', async () => {
-  btn.disabled = true;
-  await fetch('/admin/inventory/sync', {method:'POST', headers:{'X-Admin-Secret':SECRET}});
-  check();
+
+quickBtn.addEventListener('click', async () => {
+  quickBtn.disabled = true;
+  await fetch('/admin/inventory/quick', {method:'POST', headers:{'X-Admin-Secret':SECRET}});
+  poll();
 });
+
+fullBtn.addEventListener('click', async () => {
+  fullBtn.disabled = true;
+  await fetch('/admin/inventory/full', {method:'POST', headers:{'X-Admin-Secret':SECRET}});
+  poll();
+});
+
 csvBtn.addEventListener('click', async () => {
   const res = await fetch('/admin/inventory/products.csv', {headers:{'X-Admin-Secret':SECRET}});
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank');
 });
-check();
+
+poll();
 </script>
 {% endblock %}

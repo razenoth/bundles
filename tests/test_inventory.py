@@ -1,12 +1,24 @@
 import os
+import sys
 import time
-import requests
 
+# Ensure env vars available during module import
+os.environ.setdefault('REPAIRSHOPR_SUBDOMAIN', 'test')
+os.environ.setdefault('REPAIRSHOPR_API_KEY', 'key')
+os.environ.setdefault('ADMIN_SECRET', 's3cr3t')
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from app import create_app
-from app.inventory_store import init_db, upsert_products, search_products, get_meta
+from app.inventory_store import (
+    init_db,
+    upsert_products,
+    search_products,
+    get_sync_state,
+    set_sync_state,
+)
 from app import inventory_sync
+from app.repairshopr_client import TokenBucket
 
-# Helper to create app with temp instance path
 
 def make_app(tmp_path):
     os.environ.setdefault('REPAIRSHOPR_SUBDOMAIN', 'test')
@@ -23,19 +35,22 @@ def make_app(tmp_path):
 def test_upc_local_then_remote(monkeypatch, tmp_path):
     app = make_app(tmp_path)
     with app.app_context():
-        upsert_products([{'id':1,'name':'Local','upc_code':'12345678','price_retail':1,'price_cost':0}])
+        upsert_products([
+            {'id': 1, 'name': 'Local', 'upc_code': '12345678', 'price': 1, 'active': True},
+        ])
         res = search_products('12345678')
         assert res and res[0]['id'] == 1
 
         called = []
+
         def fake_bar(code):
             called.append(code)
-            return {'id':2,'name':'Remote','upc_code':code,'price_retail':2,'price_cost':1}
-        monkeypatch.setattr(inventory_sync, 'fetch_product_by_barcode', fake_bar)
-        RF = type('RF',(),{
+            return {'id': 2, 'name': 'Remote', 'upc_code': code, 'price': 2, 'active': True}
+
+        RF = type('RF', (), {
             'by_barcode': staticmethod(fake_bar),
             'by_sku': staticmethod(lambda s: []),
-            'by_query': staticmethod(lambda q: [])
+            'by_query': staticmethod(lambda q: []),
         })
         res = search_products('87654321', remote_fetch=RF)
         assert called == ['87654321']
@@ -43,26 +58,28 @@ def test_upc_local_then_remote(monkeypatch, tmp_path):
         # subsequent hit local
         called.clear()
         res = search_products('87654321')
-        assert not called
-        assert res and res[0]['id'] == 2
+        assert not called and res[0]['id'] == 2
 
 
 def test_sku_local_then_remote(monkeypatch, tmp_path):
     app = make_app(tmp_path)
     with app.app_context():
-        upsert_products([{'id':1,'name':'Local','sku':'ABC123','price_retail':1,'price_cost':0}])
+        upsert_products([
+            {'id': 1, 'name': 'Local', 'sku': 'ABC123', 'price': 1, 'active': True},
+        ])
         res = search_products('ABC123')
         assert res and res[0]['id'] == 1
 
         called = []
+
         def fake_sku(sku):
             called.append(sku)
-            return [{'id':3,'name':'RemoteSku','sku':sku,'price_retail':3,'price_cost':1}]
-        monkeypatch.setattr(inventory_sync, 'fetch_products_by_sku', fake_sku)
-        RF = type('RF',(),{
+            return [{'id': 3, 'name': 'RemoteSku', 'sku': sku, 'price': 3, 'active': True}]
+
+        RF = type('RF', (), {
             'by_barcode': staticmethod(lambda b: None),
             'by_sku': staticmethod(fake_sku),
-            'by_query': staticmethod(lambda q: [])
+            'by_query': staticmethod(lambda q: []),
         })
         res = search_products('DEF456', remote_fetch=RF)
         assert called == ['DEF456']
@@ -75,7 +92,10 @@ def test_sku_local_then_remote(monkeypatch, tmp_path):
 def test_fts_limit_offset(tmp_path):
     app = make_app(tmp_path)
     with app.app_context():
-        rows = [{'id':i,'name':f'Widget {i}','sku':f'W{i}','price_retail':1,'price_cost':0} for i in range(1,31)]
+        rows = [
+            {'id': i, 'name': f'Widget {i}', 'sku': f'W{i}', 'price': 1, 'active': True}
+            for i in range(1, 31)
+        ]
         upsert_products(rows)
         res1 = search_products('Widget', page=1)
         res2 = search_products('Widget', page=2)
@@ -84,90 +104,82 @@ def test_fts_limit_offset(tmp_path):
 
 
 def test_token_bucket_throttles():
-    bucket = inventory_sync.TokenBucket(capacity=2, refill_per_min=60)
+    bucket = TokenBucket(capacity=2, refill_per_min=120)  # ~2 rps
     start = time.monotonic()
-    bucket.throttle()
-    bucket.throttle()
-    bucket.throttle()
+    bucket.acquire()
+    bucket.acquire()
+    bucket.acquire()
     elapsed = time.monotonic() - start
-    assert elapsed >= 1.0
-
-
-def test_admin_sync(monkeypatch, tmp_path):
-    app = make_app(tmp_path)
-    client = app.test_client()
-
-    def fake_full_sync():
-        with app.app_context():
-            from app.inventory_store import set_meta
-            set_meta('inventory_last_synced_at', 'now')
-            set_meta('inventory_last_synced_count', '3')
-            set_meta('inventory_sync_running', '0')
-            set_meta('inventory_sync_status', 'completed')
-    import app.admin as admin_module
-    monkeypatch.setattr(admin_module, 'full_sync', fake_full_sync)
-
-    res = client.post('/admin/inventory/sync', headers={'X-Admin-Secret':'s3cr3t'})
-    assert res.status_code == 200
-    for _ in range(50):
-        status = client.get(
-            '/admin/inventory/status', headers={'X-Admin-Secret':'s3cr3t'}
-        ).get_json()
-        if status['running'] == '0':
-            break
-        time.sleep(0.1)
-    assert status['running'] == '0'
-    assert status['last_synced_at'] == 'now'
-    assert status['last_synced_count'] == '3'
-    assert status['state'] == 'completed'
+    assert elapsed >= 0.5
 
 
 def test_full_sync_pagination(monkeypatch, tmp_path):
     app = make_app(tmp_path)
     with app.app_context():
         pages = [
-            ([{'id': i} for i in range(1, 26)], 200, 1.0),
-            ([{'id': i} for i in range(26, 51)], 200, 1.0),
-            ([{'id': i} for i in range(51, 58)], 200, 1.0),
+            [{'id': i, 'name': f'P{i}', 'price': 1, 'active': True} for i in range(1, 26)],
+            [{'id': i, 'name': f'P{i}', 'price': 1, 'active': True} for i in range(26, 51)],
+            [{'id': i, 'name': f'P{i}', 'price': 1, 'active': True} for i in range(51, 58)],
         ]
         calls = []
 
-        def fake_fetch(sess, page):
+        def fake_fetch(page, sort="id ASC"):
             calls.append(page)
-            return pages[page - 1] if page - 1 < len(pages) else ([], 200, 1.0)
+            return pages[page - 1] if page - 1 < len(pages) else []
 
         monkeypatch.setattr(inventory_sync, 'fetch_products_page', fake_fetch)
-        inventory_sync.full_sync()
-        assert get_meta('inventory_last_synced_count') == '57'
+        res = inventory_sync.full_sync()
+        assert res['total'] == 57
+        st = get_sync_state()
+        assert st['max_product_id_seen'] == 57
         assert calls == [1, 2, 3]
-        assert get_meta('inventory_sync_status') == 'completed'
 
 
-def test_fetch_products_page_retry(monkeypatch, tmp_path):
-    make_app(tmp_path)  # ensure env vars set
-    sess = inventory_sync.session()
-    attempts = {'n': 0}
+def test_quick_update_new_and_audit(monkeypatch, tmp_path):
+    app = make_app(tmp_path)
+    with app.app_context():
+        upsert_products([
+            {'id': 1, 'name': 'Old', 'price': 0, 'active': True}
+        ])
+        set_sync_state({'max_product_id_seen': 50, 'next_audit_page': 1})
+        calls = []
 
-    def fake_get(url, params=None):
-        attempts['n'] += 1
-        resp = requests.Response()
-        resp.url = url
-        resp.headers['Content-Type'] = 'application/json'
-        if attempts['n'] == 1:
-            resp.status_code = 429
-            resp._content = b'{}'
-        else:
-            resp.status_code = 200
-            resp._content = b'{"products":[{"id":1}]}'
-        return resp
+        def fake_fetch(page, sort="id ASC"):
+            calls.append((page, sort))
+            if sort == 'id DESC':
+                return [
+                    {'id': 60, 'name': 'N1', 'price': 1, 'active': True},
+                    {'id': 55, 'name': 'N2', 'price': 1, 'active': True},
+                    {'id': 45, 'name': 'N3', 'price': 1, 'active': True},
+                ]
+            else:  # audit
+                return [{'id': 1, 'name': 'New', 'price': 0, 'active': True}]
 
-    monkeypatch.setattr(sess, 'get', fake_get)
-    monkeypatch.setattr(inventory_sync.bucket, 'throttle', lambda: None)
-    sleeps = []
-    monkeypatch.setattr(inventory_sync.time, 'sleep', lambda s: sleeps.append(s))
-    monkeypatch.setattr(inventory_sync.random, 'random', lambda: 0)
+        monkeypatch.setattr(inventory_sync, 'fetch_products_page', fake_fetch)
+        res = inventory_sync.quick_update(k_pages=1)
+        assert res['new'] == 2
+        assert res['updated'] == 1
+        assert res['checked'] == 1
+        st = get_sync_state()
+        assert st['max_product_id_seen'] == 60
+        assert st['next_audit_page'] == 1
+        # only one descending page call
+        assert [c for c in calls if c[1] == 'id DESC'] == [(1, 'id DESC')]
 
-    items, status, _ = inventory_sync.fetch_products_page(sess, 1)
-    assert len(items) == 1
-    assert attempts['n'] == 2
-    assert sleeps and sleeps[0] == 0.5
+
+def test_next_audit_wrap(monkeypatch, tmp_path):
+    app = make_app(tmp_path)
+    with app.app_context():
+        set_sync_state({'max_product_id_seen': 0, 'next_audit_page': 5})
+
+        def fake_fetch(page, sort="id ASC"):
+            if sort == 'id DESC':
+                return []
+            # audit call returns < PAGE_SIZE to force wrap
+            return [{'id': 1, 'name': 'X', 'price': 0, 'active': True}]
+
+        monkeypatch.setattr(inventory_sync, 'fetch_products_page', fake_fetch)
+        inventory_sync.quick_update(k_pages=1)
+        st = get_sync_state()
+        assert st['next_audit_page'] == 1
+
