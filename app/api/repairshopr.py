@@ -24,13 +24,11 @@ def get_products(query):
     seen_ids = set()
 
     # Try multiple search parameter variations.  The RepairShopr API supports
-    # searching by different fields depending on the parameter name.  We query
-    # several to cover common cases a user may type.
+    # searching by different fields depending on the parameter name.  To keep
+    # the search fast we limit lookups to name and SKU only.
     param_sets = [
-        {'query': query},        # generic search (usually name)
-        {'name': query},         # explicit name search
-        {'description': query},  # description search
-        {'sku': query},          # SKU lookup
+        {'name': query},  # explicit name search
+        {'sku': query},   # SKU lookup
     ]
 
     for params in param_sets:

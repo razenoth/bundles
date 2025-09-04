@@ -11,19 +11,22 @@ document.addEventListener('DOMContentLoaded', () => {
   function recalcTotals() {
     let totalCost = 0, totalRetail = 0;
     itemsBody.querySelectorAll('tr').forEach(row => {
-      const q     = parseFloat(row.querySelector('input[name="quantity"]').value) || 0;
-      const cost  = parseFloat(row.querySelector('input[name="cost"]').value)       || 0;
-      const retail= parseFloat(row.querySelector('input[name="retail"]').value)     || 0;
-      totalCost  += cost * q;
-      totalRetail+= retail * q;
+      const q      = parseFloat(row.querySelector('input[name="quantity"]').value) || 0;
+      const cost   = parseFloat(row.querySelector('input[name="cost"]').value)       || 0;
+      const retail = parseFloat(row.querySelector('input[name="retail"]').value)     || 0;
+      totalCost   += cost * q;
+      totalRetail += retail * q;
     });
-    document.getElementById('total-cost').textContent   = totalCost.toFixed(2);
-    document.getElementById('total-retail').textContent = totalRetail.toFixed(2);
-    const markup = totalCost > 0
-      ? ((totalRetail - totalCost) / totalCost * 100).toFixed(2) + '%'
-      : '0.00%';
-    document.getElementById('markup-percent').textContent = markup;
-    document.getElementById('profit-amount').textContent = (totalRetail - totalCost).toFixed(2);
+
+    const profit = totalRetail - totalCost;
+    const markup = totalCost  > 0 ? (profit / totalCost  * 100) : 0;
+    const margin = totalRetail> 0 ? (profit / totalRetail* 100) : 0;
+
+    document.getElementById('total-cost').textContent    = totalCost.toFixed(2);
+    document.getElementById('total-retail').textContent  = totalRetail.toFixed(2);
+    document.getElementById('profit-amount').textContent = profit.toFixed(2);
+    document.getElementById('markup-percent').textContent= markup.toFixed(2) + '%';
+    document.getElementById('margin-percent').textContent= margin.toFixed(2) + '%';
   }
 
   // Initial calc on page load
@@ -42,7 +45,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await fetch(`/bundles/search?q=${encodeURIComponent(q)}`);
         const { products } = await res.json();
         resultsList.innerHTML = products.map(p => `
-          <li class="list-group-item d-flex justify-content-between align-items-center" data-id="${p.id}">
+          <li class="list-group-item d-flex justify-content-between align-items-center"
+              data-id="${p.id}"
+              data-name="${p.name.replace(/"/g,'&quot;')}"
+              data-description="${p.description.replace(/"/g,'&quot;')}"
+              data-cost="${p.cost}"
+              data-retail="${p.retail}">
             <div style="flex:1;">
               <strong>${p.name}</strong><br>
               ${p.description}<br>
@@ -68,6 +76,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!e.target.classList.contains('add-btn')) return;
     const li      = e.target.closest('li');
     const id      = li.dataset.id;
+    const name    = li.dataset.name;
+    const desc    = li.dataset.description;
+    const cost    = parseFloat(li.dataset.cost);
+    const retail  = parseFloat(li.dataset.retail);
     const qtyInp  = li.querySelector('.qty-input');
     const quantity= parseInt(qtyInp.value, 10) || 1;
 
@@ -78,11 +90,22 @@ document.addEventListener('DOMContentLoaded', () => {
         body: JSON.stringify({ id, q: searchInput.value.trim(), type:'product', quantity })
       });
       if (!res.ok) throw new Error(await res.text());
+      const { item_id } = await res.json();
 
-      // Fetch the new item HTML from server or append manually.
-      // Simplest: reload only the table and summary via AJAX,
-      // but for now: manual row append is left as an exercise.
-      window.location.reload();  // fallback ensures totals correct
+      const row = document.createElement('tr');
+      row.dataset.itemId = item_id;
+      row.innerHTML = `
+        <td><input type="text" name="product_name" class="form-control" value="${name}"></td>
+        <td><input type="text" name="description" class="form-control" value="${desc}"></td>
+        <td><input type="number" name="quantity" class="form-control" min="0" value="${quantity}"></td>
+        <td><input type="text" name="cost" class="form-control" value="${cost.toFixed(2)}"></td>
+        <td><input type="text" name="retail" class="form-control" value="${retail.toFixed(2)}"></td>
+        <td><button class="btn btn-sm btn-danger remove-item">&times;</button></td>
+      `;
+      itemsBody.appendChild(row);
+      recalcTotals();
+      resultsList.innerHTML = '';
+      searchInput.value = '';
     } catch (err) {
       console.error('Add-item error:', err);
     }
@@ -91,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Remove item
   itemsBody.addEventListener('click', async e => {
     if (!e.target.classList.contains('remove-item')) return;
+    if (!confirm('Remove this item?')) return;
     const row    = e.target.closest('tr');
     const itemId = row.dataset.itemId;
     try {

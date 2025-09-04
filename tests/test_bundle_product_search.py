@@ -35,7 +35,7 @@ def make_fake_get(responses):
 
 def test_search_by_name(monkeypatch):
     responses = {
-        'query': {
+        'name': {
             'Widget': {
                 'products': [
                     {
@@ -57,7 +57,8 @@ def test_search_by_name(monkeypatch):
     assert prods[0]['retail'] == 2.0
 
 
-def test_search_by_description(monkeypatch):
+def test_description_not_searched(monkeypatch):
+    """Description-only matches should not return results."""
     responses = {
         'description': {
             'amazing': {
@@ -75,10 +76,7 @@ def test_search_by_description(monkeypatch):
     }
     monkeypatch.setattr(repairshopr.requests, 'get', make_fake_get(responses))
     prods = search_products('amazing')
-    assert len(prods) == 1
-    assert prods[0]['id'] == 2
-    assert prods[0]['cost'] == 3.0
-    assert prods[0]['retail'] == 5.0
+    assert prods == []
 
 
 def test_search_by_sku(monkeypatch):
