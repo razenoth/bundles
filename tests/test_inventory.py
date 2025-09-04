@@ -103,6 +103,7 @@ def test_admin_sync(monkeypatch, tmp_path):
             set_meta('inventory_last_synced_at', 'now')
             set_meta('inventory_last_synced_count', '3')
             set_meta('inventory_sync_running', '0')
+            set_meta('inventory_sync_status', 'completed')
     import app.admin as admin_module
     monkeypatch.setattr(admin_module, 'full_sync', fake_full_sync)
 
@@ -118,24 +119,7 @@ def test_admin_sync(monkeypatch, tmp_path):
     assert status['running'] == '0'
     assert status['last_synced_at'] == 'now'
     assert status['last_synced_count'] == '3'
-
-
-def test_admin_inventory_products(tmp_path):
-    app = make_app(tmp_path)
-    with app.app_context():
-        upsert_products([
-            {
-                'id': 1,
-                'name': 'Gizmo',
-                'price_retail': 1,
-                'price_cost': 0,
-                'quantity': 7,
-            }
-        ])
-    client = app.test_client()
-    res = client.get('/admin/inventory/products', headers={'X-Admin-Secret': 's3cr3t'})
-    data = res.get_json()
-    assert data['products'][0]['quantity'] == 7
+    assert status['state'] == 'completed'
 
 
 def test_full_sync_pagination(monkeypatch, tmp_path):
@@ -156,6 +140,7 @@ def test_full_sync_pagination(monkeypatch, tmp_path):
         inventory_sync.full_sync()
         assert get_meta('inventory_last_synced_count') == '57'
         assert calls == [1, 2, 3]
+        assert get_meta('inventory_sync_status') == 'completed'
 
 
 def test_fetch_products_page_retry(monkeypatch, tmp_path):

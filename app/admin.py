@@ -16,7 +16,7 @@ from flask import (
     make_response,
 )
 
-from .inventory_store import get_meta, list_products, ro_conn, set_meta
+from .inventory_store import get_meta, ro_conn, set_meta
 from .inventory_sync import full_sync
 
 bp = Blueprint('admin', __name__, template_folder='templates/admin')
@@ -63,14 +63,8 @@ def inventory_status():
         last_synced_at=get_meta('inventory_last_synced_at'),
         last_synced_count=get_meta('inventory_last_synced_count'),
         last_error=get_meta('inventory_last_error'),
+        state=get_meta('inventory_sync_status', 'idle'),
     )
-
-
-@bp.route('/inventory/products')
-def inventory_products():
-    """Expose a subset of the mirrored products for admin inspection."""
-    prods = list_products()
-    return jsonify(products=prods)
 
 
 @bp.route('/inventory/products.csv')
