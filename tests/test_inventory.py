@@ -1,8 +1,9 @@
 import os
 import time
+import requests
 
 from app import create_app
-from app.inventory_store import init_db, upsert_products, search_products
+from app.inventory_store import init_db, upsert_products, search_products, get_meta
 from app import inventory_sync
 
 # Helper to create app with temp instance path
@@ -100,18 +101,23 @@ def test_admin_sync(monkeypatch, tmp_path):
         with app.app_context():
             from app.inventory_store import set_meta
             set_meta('inventory_last_synced_at', 'now')
+            set_meta('inventory_last_synced_count', '3')
+            set_meta('inventory_sync_running', '0')
     import app.admin as admin_module
     monkeypatch.setattr(admin_module, 'full_sync', fake_full_sync)
 
     res = client.post('/admin/inventory/sync', headers={'X-Admin-Secret':'s3cr3t'})
     assert res.status_code == 200
     for _ in range(50):
-        status = client.get('/admin/inventory/status', headers={'X-Admin-Secret':'s3cr3t'}).get_json()
-        if not status['running']:
+        status = client.get(
+            '/admin/inventory/status', headers={'X-Admin-Secret':'s3cr3t'}
+        ).get_json()
+        if status['running'] == '0':
             break
         time.sleep(0.1)
-    assert status['running'] is False
+    assert status['running'] == '0'
     assert status['last_synced_at'] == 'now'
+    assert status['last_synced_count'] == '3'
 
 
 def test_admin_inventory_products(tmp_path):
@@ -130,3 +136,53 @@ def test_admin_inventory_products(tmp_path):
     res = client.get('/admin/inventory/products', headers={'X-Admin-Secret': 's3cr3t'})
     data = res.get_json()
     assert data['products'][0]['quantity'] == 7
+
+
+def test_full_sync_pagination(monkeypatch, tmp_path):
+    app = make_app(tmp_path)
+    with app.app_context():
+        pages = [
+            ([{'id': i} for i in range(1, 26)], 200, 1.0),
+            ([{'id': i} for i in range(26, 51)], 200, 1.0),
+            ([{'id': i} for i in range(51, 58)], 200, 1.0),
+        ]
+        calls = []
+
+        def fake_fetch(sess, page):
+            calls.append(page)
+            return pages[page - 1] if page - 1 < len(pages) else ([], 200, 1.0)
+
+        monkeypatch.setattr(inventory_sync, 'fetch_products_page', fake_fetch)
+        inventory_sync.full_sync()
+        assert get_meta('inventory_last_synced_count') == '57'
+        assert calls == [1, 2, 3]
+
+
+def test_fetch_products_page_retry(monkeypatch, tmp_path):
+    make_app(tmp_path)  # ensure env vars set
+    sess = inventory_sync.session()
+    attempts = {'n': 0}
+
+    def fake_get(url, params=None):
+        attempts['n'] += 1
+        resp = requests.Response()
+        resp.url = url
+        resp.headers['Content-Type'] = 'application/json'
+        if attempts['n'] == 1:
+            resp.status_code = 429
+            resp._content = b'{}'
+        else:
+            resp.status_code = 200
+            resp._content = b'{"products":[{"id":1}]}'
+        return resp
+
+    monkeypatch.setattr(sess, 'get', fake_get)
+    monkeypatch.setattr(inventory_sync.bucket, 'throttle', lambda: None)
+    sleeps = []
+    monkeypatch.setattr(inventory_sync.time, 'sleep', lambda s: sleeps.append(s))
+    monkeypatch.setattr(inventory_sync.random, 'random', lambda: 0)
+
+    items, status, _ = inventory_sync.fetch_products_page(sess, 1)
+    assert len(items) == 1
+    assert attempts['n'] == 2
+    assert sleeps and sleeps[0] == 0.5
