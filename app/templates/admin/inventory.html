@@ -5,34 +5,33 @@
 <button id="sync-btn" class="btn btn-primary">Update now</button>
 <button id="csv-btn" class="btn btn-secondary ms-2">Open DB CSV</button>
 <div id="status" class="mt-2"></div>
-
-<table class="table mt-4">
-  <thead><tr><th>ID</th><th>Name</th><th>Qty</th></tr></thead>
-  <tbody id="prod-body"></tbody>
-</table>
 <script>
 const SECRET = '{{ secret }}';
 const btn = document.getElementById('sync-btn');
 const csvBtn = document.getElementById('csv-btn');
 const statusEl = document.getElementById('status');
-const prodBody = document.getElementById('prod-body');
 async function check() {
   const res = await fetch('/admin/inventory/status', {headers:{'X-Admin-Secret':SECRET}});
   const data = await res.json();
   document.getElementById('last-sync').textContent = data.last_synced_at || 'never';
   document.getElementById('last-count').textContent = data.last_synced_count || '0';
   if (data.running === "1") {
-    statusEl.textContent = 'Getting information from RepairShopr...';
+    if (data.state === 'waiting') {
+      statusEl.textContent = 'Waiting for rate limit...';
+    } else {
+      statusEl.textContent = 'Getting information from RepairShopr...';
+    }
     btn.disabled = true;
     setTimeout(check, 3000);
   } else {
     btn.disabled = false;
     if (data.last_error) {
       statusEl.textContent = data.last_error;
-    } else {
+    } else if (data.state === 'completed') {
       statusEl.textContent = 'Finished fetching.';
+    } else {
+      statusEl.textContent = '';
     }
-    loadProducts();
   }
 }
 btn.addEventListener('click', async () => {
@@ -46,12 +45,6 @@ csvBtn.addEventListener('click', async () => {
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank');
 });
-async function loadProducts(){
-  const res = await fetch('/admin/inventory/products', {headers:{'X-Admin-Secret':SECRET}});
-  const data = await res.json();
-  prodBody.innerHTML = data.products.map(p=>`<tr><td>${p.id}</td><td>${p.name}</td><td>${p.quantity}</td></tr>`).join('');
-}
 check();
-loadProducts();
 </script>
 {% endblock %}

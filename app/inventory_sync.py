@@ -133,8 +133,10 @@ def full_sync() -> None:
     page = 1
     total = 0
     pages_fetched = 0
+    requests_made = 0
     try:
         while True:
+            set_meta("inventory_sync_status", "fetching")
             items, status, latency = fetch_products_page(sess, page)
             logging.info(
                 "sync page=%s items=%s total=%s status=%s %.1fms",
@@ -149,12 +151,17 @@ def full_sync() -> None:
             upsert_products(items)
             total += len(items)
             pages_fetched = page
+            requests_made += 1
             if len(items) < PAGE_SIZE:
                 break
             page += 1
+            if requests_made % 120 == 0:
+                set_meta("inventory_sync_status", "waiting")
+                time.sleep(60)
         set_meta("inventory_last_synced_at", utcnow_iso())
         set_meta("inventory_last_synced_count", str(total))
         set_meta("inventory_last_error", "")
+        set_meta("inventory_sync_status", "completed")
         logging.info(
             "sync completed pages=%s total_items=%s", pages_fetched, total
         )
@@ -167,3 +174,4 @@ def full_sync() -> None:
         raise
     finally:
         set_meta("inventory_sync_running", "0")
+        set_meta("inventory_sync_status", "completed")
