@@ -38,8 +38,10 @@ def create_app(config_name: str | None = None) -> Flask:
 
     # Ensure models loaded so tables can be created
     from app import models  # noqa
+    from app.inventory_store import init_db
     with app.app_context():
         db.create_all()
+        init_db()
 
     @app.route('/')
     def index():
@@ -55,8 +57,10 @@ def create_app(config_name: str | None = None) -> Flask:
 
     from app.bundles.routes import bp as bundles_bp
     from app.estimates.routes import bp as estimates_bp
+    from app.admin import bp as admin_bp
 
     app.register_blueprint(bundles_bp, url_prefix='/bundles')
     app.register_blueprint(estimates_bp, url_prefix='/estimates')
+    app.register_blueprint(admin_bp, url_prefix='/admin')
 
     return app

@@ -1,17 +1,16 @@
 # app/bundles/utils.py
-from app.api.repairshopr import get_products
+from app.inventory_store import search_products as _search_products
+from app import inventory_sync
 
 
-def search_products(q: str) -> list:
-    raw = get_products(q or '') or []
-    return [
-        {
-            'id'         : p['id'],
-            'name'       : p.get('name'),
-            'description': (p.get('description') or '')[:100],
-            'cost'       : float(p.get('price_cost', 0)),
-            'retail'     : float(p.get('price_retail', 0)),
-            'type'       : 'product'
-        }
-        for p in raw
-    ]
+class RemoteFetch:
+    """Adapter exposing network fetch helpers."""
+
+    by_barcode = staticmethod(inventory_sync.fetch_product_by_barcode)
+    by_sku = staticmethod(inventory_sync.fetch_products_by_sku)
+    by_query = staticmethod(inventory_sync.fetch_products_query)
+
+
+def search_products(q: str, page: int = 1) -> list:
+    rows = _search_products(q, page=page, remote_fetch=RemoteFetch)
+    return [dict(p, type='product') for p in rows]

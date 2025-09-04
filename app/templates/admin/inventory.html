@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Inventory Mirror</h1>
+<p>Last DB Pull: <span id="last-sync">{{ last }}</span></p>
+<button id="sync-btn" class="btn btn-primary">Run manual update</button>
+<div id="status" class="mt-2"></div>
+<script>
+const SECRET = '{{ secret }}';
+const btn = document.getElementById('sync-btn');
+const statusEl = document.getElementById('status');
+async function check() {
+  const res = await fetch('/admin/inventory/status', {headers:{'X-Admin-Secret':SECRET}});
+  const data = await res.json();
+  document.getElementById('last-sync').textContent = data.last_synced_at || 'never';
+  if (data.running) {
+    statusEl.textContent = 'Sync running...';
+    btn.disabled = true;
+    setTimeout(check, 3000);
+  } else {
+    statusEl.textContent = '';
+    btn.disabled = false;
+  }
+}
+btn.addEventListener('click', async () => {
+  btn.disabled = true;
+  await fetch('/admin/inventory/sync', {method:'POST', headers:{'X-Admin-Secret':SECRET}});
+  check();
+});
+check();
+</script>
+{% endblock %}

@@ -75,7 +75,8 @@ def delete_bundle(bundle_id):
 @bp.route('/search')
 def bundles_search():
     q = request.args.get('q', '')
-    products = search_products(q)
+    page = int(request.args.get('page', 1))
+    products = search_products(q, page=page)
     return jsonify(products=products)
 
 @bp.route('/<int:bundle_id>/add-item', methods=['POST'])

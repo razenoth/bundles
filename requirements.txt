@@ -7,3 +7,4 @@ gunicorn
 Flask-WTF
 ruff
 pytest
+cachetools

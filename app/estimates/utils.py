@@ -1,26 +1,29 @@
 # app/estimates/utils.py
 
-from app.api.repairshopr import get_products, search_customers
+from app.inventory_store import search_products as _search_products
+from app import inventory_sync
+from app.api.repairshopr import search_customers
 from app.models import Bundle, EstimateItem
 
-def search_products(q: str) -> list:
-    """
-    Called by /estimates/search
-    Returns a list of dicts with:
-      id, name, description (first 100 chars),
-      unit_price (cost), retail, type='product'
-    """
-    raw = get_products(q or '') or []
+
+class RemoteFetch:
+    by_barcode = staticmethod(inventory_sync.fetch_product_by_barcode)
+    by_sku = staticmethod(inventory_sync.fetch_products_by_sku)
+    by_query = staticmethod(inventory_sync.fetch_products_query)
+
+
+def search_products(q: str, page: int = 1) -> list:
+    rows = _search_products(q, page=page, remote_fetch=RemoteFetch)
     return [
         {
-            'id'          : p.get('id'),
-            'name'        : p.get('name'),
-            'description' : (p.get('description') or '')[:100],
-            'unit_price'  : float(p.get('price_cost', p.get('price', 0))),
-            'retail'      : float(p.get('price_retail', p.get('price', 0))),
-            'type'        : 'product'
+            'id'         : p['id'],
+            'name'       : p['name'],
+            'description': p['description'],
+            'unit_price' : p['cost'],
+            'retail'     : p['retail'],
+            'type'       : 'product'
         }
-        for p in raw
+        for p in rows
     ]
 
 

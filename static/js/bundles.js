@@ -7,6 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const bundleId    = itemsBody.dataset.bundleId;
 
   let debounce;
+  let abortCtrl;
+  let page = 1;
 
   function recalcTotals() {
     let totalCost = 0, totalRetail = 0;
@@ -33,46 +35,77 @@ document.addEventListener('DOMContentLoaded', () => {
   recalcTotals();
 
   // Live search
+  function renderResults(products, reset = true) {
+    if (reset) resultsList.innerHTML = '';
+    resultsList.innerHTML += products.map(p => `
+      <li class="list-group-item d-flex justify-content-between align-items-center"
+          data-id="${p.id}"
+          data-name="${p.name.replace(/"/g,'&quot;')}"
+          data-description="${p.description.replace(/"/g,'&quot;')}"
+          data-cost="${p.cost}"
+          data-retail="${p.retail}">
+        <div style="flex:1;">
+          <strong>${p.name}</strong><br>
+          ${p.description}<br>
+          <small>Cost: $${p.cost.toFixed(2)}</small><br>
+          <small>Retail: $${p.retail.toFixed(2)}</small>
+        </div>
+        <div class="d-flex align-items-center ms-3">
+          <input type="number" class="form-control form-control-sm qty-input"
+                 value="1" min="0" style="width:60px;">
+          <button class="btn btn-sm btn-success ms-2 add-btn">Add</button>
+        </div>
+      </li>
+    `).join('');
+    if (products.length === 25) {
+      const li = document.createElement('li');
+      li.className = 'list-group-item text-center load-more';
+      li.textContent = 'Load more…';
+      resultsList.appendChild(li);
+    }
+  }
+
+  function shouldSearch(q) {
+    const isBarcode = /^\d{8,14}$/.test(q);
+    const isSku = /^[\w-]+$/.test(q);
+    return isBarcode || isSku || q.length >= 2;
+  }
+
   searchInput.addEventListener('input', () => {
     clearTimeout(debounce);
     const q = searchInput.value.trim();
-    if (!q) {
+    if (!q || !shouldSearch(q)) {
       resultsList.innerHTML = '';
       return;
     }
+    page = 1;
     debounce = setTimeout(async () => {
       try {
-        const res = await fetch(`/bundles/search?q=${encodeURIComponent(q)}`);
+        if (abortCtrl) abortCtrl.abort();
+        abortCtrl = new AbortController();
+        const res = await fetch(`/bundles/search?q=${encodeURIComponent(q)}&page=${page}`, { signal: abortCtrl.signal });
         const { products } = await res.json();
-        resultsList.innerHTML = products.map(p => `
-          <li class="list-group-item d-flex justify-content-between align-items-center"
-              data-id="${p.id}"
-              data-name="${p.name.replace(/"/g,'&quot;')}"
-              data-description="${p.description.replace(/"/g,'&quot;')}"
-              data-cost="${p.cost}"
-              data-retail="${p.retail}">
-            <div style="flex:1;">
-              <strong>${p.name}</strong><br>
-              ${p.description}<br>
-              <small>Cost: $${p.cost.toFixed(2)}</small><br>
-              <small>Retail: $${p.retail.toFixed(2)}</small>
-            </div>
-            <div class="d-flex align-items-center ms-3">
-              <input type="number" class="form-control form-control-sm qty-input"
-                     value="1" min="0" style="width:60px;">
-              <button class="btn btn-sm btn-success ms-2 add-btn">Add</button>
-            </div>
-          </li>
-        `).join('');
+        renderResults(products, true);
       } catch (err) {
-        console.error('Search fetch error:', err);
-        resultsList.innerHTML = `<li class="list-group-item text-danger">Error fetching results</li>`;
+        if (err.name !== 'AbortError') {
+          console.error('Search fetch error:', err);
+          resultsList.innerHTML = `<li class="list-group-item text-danger">Error fetching results</li>`;
+        }
       }
-    }, 300);
+    }, 350);
   });
 
   // Add item
   resultsList.addEventListener('click', async e => {
+    if (e.target.classList.contains('load-more')) {
+      const q = searchInput.value.trim();
+      e.target.remove();
+      page += 1;
+      const res = await fetch(`/bundles/search?q=${encodeURIComponent(q)}&page=${page}`);
+      const { products } = await res.json();
+      renderResults(products, false);
+      return;
+    }
     if (!e.target.classList.contains('add-btn')) return;
     const li      = e.target.closest('li');
     const id      = li.dataset.id;
