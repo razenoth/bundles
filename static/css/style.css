@@ -1,1 +1,9 @@
 body { padding-top: 1rem; }
+
+.table-danger {
+  background-color: #ff6b6b !important;
+}
+
+#bundle-items tr {
+  cursor: move;
+}

@@ -32,16 +32,16 @@
     <tr>
       <th style="width:25%">Product</th>
       <th style="width:45%">Description</th>
-      <th style="width:10%">Qty</th>
-      <th style="width:10%">Stock</th>
       <th style="width:10%">Cost</th>
       <th style="width:10%">Retail</th>
-      <th style="width:10%">Actions</th>
+      <th style="width:10%">Qty</th>
+      <th style="width:10%">Stock</th>
+      <th style="width:10%"></th>
     </tr>
   </thead>
   <tbody id="bundle-items" data-bundle-id="{{ bundle.id }}">
     {% for item in bundle.items %}
-    <tr data-item-id="{{ item.id }}" class="{% if item.stock == 0 %}table-danger{% endif %}">
+    <tr data-item-id="{{ item.id }}" class="{% if item.stock == 0 %}table-danger{% endif %}" draggable="true">
       <td>
         <input type="text" name="product_name" class="form-control"
                value="{{ item.product_name }}">
@@ -51,18 +51,24 @@
                value="{{ item.description }}">
       </td>
       <td>
+        <div class="input-group">
+          <span class="input-group-text">$</span>
+          <input type="text" name="cost" class="form-control"
+                 value="{{ "{:.2f}".format(item.unit_price) }}">
+        </div>
+      </td>
+      <td>
+        <div class="input-group">
+          <span class="input-group-text">$</span>
+          <input type="text" name="retail" class="form-control"
+                 value="{{ "{:.2f}".format(item.retail) }}">
+        </div>
+      </td>
+      <td>
         <input type="number" name="quantity" class="form-control"
                min="0" value="{{ item.quantity }}">
       </td>
       <td class="stock-cell">{{ item.stock }}</td>
-      <td>
-        <input type="text" name="cost" class="form-control"
-               value="{{ "{:.2f}".format(item.unit_price) }}">
-      </td>
-      <td>
-        <input type="text" name="retail" class="form-control"
-               value="{{ "{:.2f}".format(item.retail) }}">
-      </td>
       <td>
         <button class="btn btn-sm btn-danger remove-item">&times;</button>
       </td>
