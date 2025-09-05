@@ -11,6 +11,37 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
+  // --- Customer search ---
+  const csIn  = document.getElementById('customer-search');
+  const csId  = document.getElementById('customer-id');
+  const csAddr= document.getElementById('customer-address');
+  const csSug = document.getElementById('customer-suggestions');
+  if (csIn) {
+    csIn.addEventListener('input', debounce(async () => {
+      const q = csIn.value.trim();
+      if (!q) { csSug.innerHTML = ''; return; }
+      const res = await fetch(`/estimates/search-customer?q=${encodeURIComponent(q)}`);
+      const { customers } = await res.json();
+      csSug.innerHTML = customers.map(c => `
+        <li class="list-group-item"
+            data-id="${c.id}"
+            data-name="${c.name}"
+            data-address="${(c.address || '').replace(/"/g, '&quot;')}">
+          <strong>${c.name}</strong><br>
+          <small>${c.address || ''}</small>
+        </li>
+      `).join('');
+    }));
+    csSug.addEventListener('click', e => {
+      const li = e.target.closest('li');
+      if (!li) return;
+      csId.value = li.dataset.id;
+      csIn.value = li.dataset.name;
+      csAddr.textContent = li.dataset.address || '';
+      csSug.innerHTML = '';
+    });
+  }
+
   // --- Save button (PATCH existing estimate) ---
   document.getElementById('save-estimate').addEventListener('click', async () => {
     const payload = {
@@ -55,6 +86,23 @@ document.addEventListener('DOMContentLoaded', () => {
         recalc();
       } catch (err) {
         console.error('Refresh estimate error:', err);
+      }
+    });
+  }
+
+  // --- Push to RepairShopr ---
+  const pushBtn = document.getElementById('push-rs');
+  if (pushBtn) {
+    pushBtn.addEventListener('click', async () => {
+      try {
+        const res = await fetch(`/estimates/${estId}/push`, { method: 'POST' });
+        if (res.ok) {
+          alert('Estimate pushed to RepairShopr');
+        } else {
+          alert('Error pushing to RepairShopr');
+        }
+      } catch (err) {
+        console.error('Push error:', err);
       }
     });
   }

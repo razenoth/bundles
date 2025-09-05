@@ -5,8 +5,27 @@
     {% if estimate %}Edit Estimate #{{ estimate.id }}
     {% else %}New Estimate{% endif %}
   </h1>
-
-  <!-- Customer & status fields omitted for brevity -->
+  <div class="mb-3 position-relative">
+    <label for="customer-search">Customer</label>
+    <input type="hidden" id="customer-id" value="{{ estimate.customer_id or '' }}">
+    <input type="text" id="customer-search" class="form-control"
+           placeholder="Search RepairShopr customers" autocomplete="off"
+           value="{{ estimate.customer_name or '' }}">
+    <ul id="customer-suggestions" class="list-group position-absolute w-100"
+        style="z-index:1000;"></ul>
+  </div>
+  <div class="mb-3">
+    <strong>Address:</strong>
+    <div id="customer-address">{{ estimate.customer_address or '' }}</div>
+  </div>
+  <div class="mb-3">
+    <label for="status">Status</label>
+    <select id="status" class="form-select">
+      {% for st in ['draft', 'sent'] %}
+      <option value="{{ st }}" {% if estimate.status == st %}selected{% endif %}>{{ st.title() }}</option>
+      {% endfor %}
+    </select>
+  </div>
 
   <hr>
 
