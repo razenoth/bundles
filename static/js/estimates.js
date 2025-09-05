@@ -199,6 +199,7 @@ bsSug.addEventListener('click', async e => {
     await addItem(data);
     psSug.innerHTML = '';
     psIn.value     = '';
+    if (psAbort) psAbort.abort();
   });
 
   // --- Add line item via AJAX ---
@@ -217,17 +218,14 @@ bsSug.addEventListener('click', async e => {
       const parentData = { ...payload.parent, type: 'bundle' };
       const parentRow  = buildRow(parentData);
       body.appendChild(parentRow);
-      attachDragHandlers(parentRow);
       payload.items.forEach(it => {
         const childData = { ...it, type: 'item' };
         const childRow  = buildRow(childData, parentData.id);
         body.appendChild(childRow);
-        attachDragHandlers(childRow);
       });
     } else {
       const row = buildRow({ ...data, id: payload.item_id, type: data.type });
       body.appendChild(row);
-      attachDragHandlers(row);
     }
     recalc();
   }
@@ -253,11 +251,11 @@ bsSug.addEventListener('click', async e => {
     nameTd.textContent = data.name;
     tr.appendChild(nameTd);
 
-    const typeTd = document.createElement('td');
-    typeTd.textContent = data.type;
-    tr.appendChild(typeTd);
+    const descTd = document.createElement('td');
+    descTd.textContent = data.description || '';
+    tr.appendChild(descTd);
 
-    for (let field of ['quantity', 'unit_price', 'retail']) {
+    for (let field of ['unit_price', 'retail', 'quantity']) {
       const td  = document.createElement('td');
       const inp = document.createElement('input');
       inp.type      = 'number';
@@ -286,6 +284,7 @@ bsSug.addEventListener('click', async e => {
     actTd.appendChild(remBtn);
     tr.appendChild(actTd);
 
+    tr.classList.toggle('table-danger', (+data.quantity || 0) === 0);
     return tr;
   }
 
@@ -299,13 +298,19 @@ bsSug.addEventListener('click', async e => {
       const r = +row.querySelector('.retail').value || 0;
       const lt = q * c;
       row.querySelector('.line-total').textContent = `$${lt.toFixed(2)}`;
+      row.classList.toggle('table-danger', q === 0);
       if (row.dataset.parentId) return; // child rows don't count toward totals
       totalCost   += lt;
       totalRetail += q * r;
     });
-    document.getElementById('total-cost').textContent   = `$${totalCost.toFixed(2)}`;
-    document.getElementById('total-retail').textContent = `$${totalRetail.toFixed(2)}`;
-    document.getElementById('total-profit').textContent = `$${(totalRetail - totalCost).toFixed(2)}`;
+    const profit = totalRetail - totalCost;
+    const markup = totalCost   > 0 ? (profit / totalCost   * 100) : 0;
+    const margin = totalRetail > 0 ? (profit / totalRetail * 100) : 0;
+    document.getElementById('total-cost').textContent    = totalCost.toFixed(2);
+    document.getElementById('total-retail').textContent  = totalRetail.toFixed(2);
+    document.getElementById('total-profit').textContent  = profit.toFixed(2);
+    document.getElementById('markup-percent').textContent= markup.toFixed(2) + '%';
+    document.getElementById('margin-percent').textContent= margin.toFixed(2) + '%';
   }
 
   // --- Inline edit, remove, toggle handlers ---
@@ -344,25 +349,21 @@ bsSug.addEventListener('click', async e => {
   });
 
   // --- Drag & drop setup ---
-  function attachDragHandlers(row) {
-    row.addEventListener('dragstart', e => {
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', null);
-      window.dragSrc = row;
-    });
-    row.addEventListener('dragover', e => {
-      e.preventDefault();
-    });
-    row.addEventListener('drop', e => {
-      e.stopPropagation();
-      const src = window.dragSrc;
-      if (src && src !== row) {
-        row.parentNode.insertBefore(src, row.nextSibling);
-      }
-    });
-  }
-  document.querySelectorAll('#items-body .draggable')
-    .forEach(r => attachDragHandlers(r));
+  let draggedRow;
+  body.addEventListener('dragstart', e => {
+    draggedRow = e.target.closest('tr');
+  });
+  body.addEventListener('dragover', e => {
+    e.preventDefault();
+    const target = e.target.closest('tr');
+    if (!target || target === draggedRow) return;
+    const rect = target.getBoundingClientRect();
+    const next = (e.clientY - rect.top) / rect.height > 0.5;
+    body.insertBefore(draggedRow, next ? target.nextSibling : target);
+  });
+  body.addEventListener('dragend', () => {
+    draggedRow = null;
+  });
 
   // Initial calculation
   recalc();

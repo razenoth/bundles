@@ -40,15 +40,15 @@
   </div>
 
   <!-- Line items with drag-and-drop -->
-  <table class="table table-bordered mt-3" id="items-table">
+  <table class="table table-striped mt-3" id="items-table">
     <thead>
       <tr>
         <th></th>
-        <th>Name</th>
-        <th>Type</th>
-        <th>Qty</th>
+        <th>Item</th>
+        <th>Description</th>
         <th>Cost</th>
         <th>Retail</th>
+        <th>Qty</th>
         <th>Line Total</th>
         <th></th>
       </tr>
@@ -56,13 +56,13 @@
     <tbody id="items-body">
       {% if items %}
         {% for it in items %}
-        <tr data-item-id="{{ it.id }}" class="draggable">
-          <td class="drag-handle">☰</td>
+        <tr data-item-id="{{ it.id }}" class="draggable{% if it.quantity == 0 %} table-danger{% endif %}" draggable="true">
+          <td>☰</td>
           <td>{{ it.name }}</td>
-          <td>{{ it.type }}</td>
-          <td><input type="number" class="form-control qty" value="{{ it.quantity }}"></td>
+          <td>{{ it.description or '' }}</td>
           <td><input type="number" class="form-control unit-price" step="0.01" value="{{ it.unit_price }}"></td>
           <td><input type="number" class="form-control retail" step="0.01" value="{{ it.retail }}"></td>
+          <td><input type="number" class="form-control qty" value="{{ it.quantity }}"></td>
           <td class="line-total">${{ '%.2f'|format(it.quantity * it.unit_price) }}</td>
           <td>
             {% if it.type=='bundle' %}
@@ -73,13 +73,13 @@
         </tr>
         {% if it.type=='bundle' %}
         {% for sub in it.children %}
-        <tr data-parent-id="{{ it.id }}" class="bundle-item draggable">
-          <td class="drag-handle">☰</td>
-          <td class="pl-4">{{ sub.name }}</td>
-          <td>item</td>
-          <td><input type="number" class="form-control qty" value="{{ sub.quantity }}"></td>
+        <tr data-parent-id="{{ it.id }}" class="bundle-item draggable{% if sub.quantity == 0 %} table-danger{% endif %}" draggable="true">
+          <td>☰</td>
+          <td class="ps-4">{{ sub.name }}</td>
+          <td>{{ sub.description or '' }}</td>
           <td><input type="number" class="form-control unit-price" step="0.01" value="{{ sub.unit_price }}"></td>
           <td><input type="number" class="form-control retail" step="0.01" value="{{ sub.retail }}"></td>
+          <td><input type="number" class="form-control qty" value="{{ sub.quantity }}"></td>
           <td class="line-total">${{ '%.2f'|format(sub.quantity * sub.unit_price) }}</td>
           <td><button class="btn btn-sm btn-danger remove-item">✕</button></td>
         </tr>
@@ -88,10 +88,52 @@
         {% endfor %}
       {% endif %}
     </tbody>
-    <tfoot>
-      <!-- totals rows unchanged -->
-    </tfoot>
   </table>
+
+  <div class="row mt-4" id="estimate-summary">
+    <div class="col-md mb-2">
+      <div class="border rounded p-2 text-center bg-light">
+        <div class="fw-bold">Total Cost</div>
+        <div>$<span id="total-cost">{{ '%.2f'|format(total_cost or 0) }}</span></div>
+      </div>
+    </div>
+    <div class="col-md mb-2">
+      <div class="border rounded p-2 text-center bg-light">
+        <div class="fw-bold">Total Retail</div>
+        <div>$<span id="total-retail">{{ '%.2f'|format(total_retail or 0) }}</span></div>
+      </div>
+    </div>
+    <div class="col-md mb-2">
+      <div class="border rounded p-2 text-center bg-light">
+        <div class="fw-bold">Profit</div>
+        <div>$<span id="total-profit">{{ '%.2f'|format((total_retail or 0) - (total_cost or 0)) }}</span></div>
+      </div>
+    </div>
+    <div class="col-md mb-2">
+      <div class="border rounded p-2 text-center bg-light">
+        <div class="fw-bold">Margin</div>
+        <div><span id="margin-percent">
+          {% if total_retail %}
+            {{ '%.2f'|format(((total_retail - total_cost) / total_retail) * 100) }}%
+          {% else %}
+            0.00%
+          {% endif %}
+        </span></div>
+      </div>
+    </div>
+    <div class="col-md mb-2">
+      <div class="border rounded p-2 text-center bg-light">
+        <div class="fw-bold">Markup</div>
+        <div><span id="markup-percent">
+          {% if total_cost %}
+            {{ '%.2f'|format(((total_retail - total_cost) / total_cost) * 100) }}%
+          {% else %}
+            0.00%
+          {% endif %}
+        </span></div>
+      </div>
+    </div>
+  </div>
 
   <!-- Save/Export/Push buttons unchanged -->
   <div class="mt-3">
