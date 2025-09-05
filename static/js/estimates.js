@@ -32,6 +32,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // --- Update estimate (refresh costs from RepairShopr) ---
+  const updateBtn = document.getElementById('update-estimate');
+  if (updateBtn) {
+    updateBtn.addEventListener('click', async () => {
+      try {
+        const res = await fetch(`/estimates/${estId}/refresh`, { method: 'POST' });
+        if (!res.ok) throw new Error(await res.text());
+        const { items } = await res.json();
+        items.forEach(it => {
+          const row = document.querySelector(`tr[data-item-id="${it.id}"]`);
+          if (!row) return;
+          const costInput = row.querySelector('.unit-price');
+          if (costInput && it.unit_price !== undefined) {
+            costInput.value = (+it.unit_price).toFixed(2);
+          }
+          const retailInput = row.querySelector('.retail');
+          if (retailInput && it.retail !== undefined) {
+            retailInput.value = (+it.retail).toFixed(2);
+          }
+        });
+        recalc();
+      } catch (err) {
+        console.error('Refresh estimate error:', err);
+      }
+    });
+  }
+
   // --- Bundle search + delegated click ---
   const bsIn  = document.getElementById('bundle-search');
   const bsSug = document.getElementById('bundle-suggestions');
@@ -176,63 +203,76 @@ bsSug.addEventListener('click', async e => {
 
   // --- Add line item via AJAX ---
   async function addItem(data) {
-    console.log('addItem called, estId=', estId, 'data=', data);
-    if (!estId) return; 
+    if (!estId) return;
     const res = await fetch(`/estimates/${estId}/add-item`, {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(data)
+      body: JSON.stringify(data)
     });
     if (!res.ok) return;
     const payload = await res.json();
-    const row = await buildRow(payload, data);
-    document.getElementById('items-body').appendChild(row);
+    const body = document.getElementById('items-body');
+
+    if (data.type === 'bundle') {
+      const parentData = { ...payload.parent, type: 'bundle' };
+      const parentRow  = buildRow(parentData);
+      body.appendChild(parentRow);
+      attachDragHandlers(parentRow);
+      payload.items.forEach(it => {
+        const childData = { ...it, type: 'item' };
+        const childRow  = buildRow(childData, parentData.id);
+        body.appendChild(childRow);
+        attachDragHandlers(childRow);
+      });
+    } else {
+      const row = buildRow({ ...data, id: payload.item_id, type: data.type });
+      body.appendChild(row);
+      attachDragHandlers(row);
+    }
     recalc();
-    attachDragHandlers(row);
   }
 
   // --- Build a new table row for the added item ---
-  async function buildRow({ item_id }, data) {
+  function buildRow(data, parentId = null) {
     const tr = document.createElement('tr');
     tr.classList.add('draggable');
     tr.draggable = true;
-    tr.dataset.itemId = item_id;
+    tr.dataset.itemId = data.id;
+    if (parentId) {
+      tr.dataset.parentId = parentId;
+      tr.classList.add('bundle-item');
+    }
 
-    // Drag handle
     const dragTd = document.createElement('td');
     dragTd.className = 'drag-handle';
     dragTd.textContent = '☰';
     tr.appendChild(dragTd);
 
-    // Name & type
-    for (let key of ['name', 'type']) {
-      const td = document.createElement('td');
-      td.textContent = data[key];
-      tr.appendChild(td);
-    }
+    const nameTd = document.createElement('td');
+    if (parentId) nameTd.classList.add('ps-4');
+    nameTd.textContent = data.name;
+    tr.appendChild(nameTd);
 
-    // Qty, cost, retail inputs
+    const typeTd = document.createElement('td');
+    typeTd.textContent = data.type;
+    tr.appendChild(typeTd);
+
     for (let field of ['quantity', 'unit_price', 'retail']) {
       const td  = document.createElement('td');
       const inp = document.createElement('input');
       inp.type      = 'number';
-      inp.step      = (field==='quantity' ? '1' : '0.01');
-      inp.className = 'form-control ' +
-        (field==='quantity' ? 'qty' : field.replace('_','-'));
-      inp.value     = data[field] ?? (field==='quantity' ? 1 : 0);
+      inp.step      = (field === 'quantity' ? '1' : '0.01');
+      inp.className = 'form-control ' + (field === 'quantity' ? 'qty' : field.replace('_','-'));
+      inp.value     = data[field] ?? (field === 'quantity' ? 1 : 0);
       td.appendChild(inp);
       tr.appendChild(td);
     }
 
-    // Line total
     const lineTd = document.createElement('td');
     lineTd.className = 'line-total';
-    lineTd.textContent = `$${(
-      (data.quantity||1) * (data.unit_price||0)
-    ).toFixed(2)}`;
+    lineTd.textContent = `$${((data.quantity || 1) * (data.unit_price || 0)).toFixed(2)}`;
     tr.appendChild(lineTd);
 
-    // Actions (toggle bundle / remove)
     const actTd = document.createElement('td');
     if (data.type === 'bundle') {
       const toggleBtn = document.createElement('button');
@@ -254,14 +294,14 @@ bsSug.addEventListener('click', async e => {
     let totalCost   = 0;
     let totalRetail = 0;
     document.querySelectorAll('#items-body tr').forEach(row => {
-      const q   = +row.querySelector('.qty').value || 0;
-      const c   = +row.querySelector('.unit-price').value || 0;
-      const r   = +row.querySelector('.retail').value || 0;
-      const lt  = q * c;
+      const q = +row.querySelector('.qty').value || 0;
+      const c = +row.querySelector('.unit-price').value || 0;
+      const r = +row.querySelector('.retail').value || 0;
+      const lt = q * c;
+      row.querySelector('.line-total').textContent = `$${lt.toFixed(2)}`;
+      if (row.dataset.parentId) return; // child rows don't count toward totals
       totalCost   += lt;
       totalRetail += q * r;
-      row.querySelector('.line-total')
-         .textContent = `$${lt.toFixed(2)}`;
     });
     document.getElementById('total-cost').textContent   = `$${totalCost.toFixed(2)}`;
     document.getElementById('total-retail').textContent = `$${totalRetail.toFixed(2)}`;
@@ -275,7 +315,9 @@ bsSug.addEventListener('click', async e => {
       if (!confirm('Remove this item?')) return;
       const row = e.target.closest('tr');
       await fetch(`/estimates/${estId}/remove-item/${row.dataset.itemId}`, { method: 'POST' });
+      const pid = row.dataset.itemId;
       row.remove();
+      document.querySelectorAll(`tr[data-parent-id="${pid}"]`).forEach(r => r.remove());
       recalc();
     }
     if (e.target.matches('.toggle-bundle')) {

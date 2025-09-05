@@ -46,7 +46,9 @@ def edit_estimate(estimate_id):
         est.status           = data.get('status', est.status)
         db.session.commit()
         return jsonify(success=True)
-    return render_template('estimates/form.html', estimate=est)
+
+    top_items = EstimateItem.query.filter_by(estimate_id=est.id, parent_id=None).all()
+    return render_template('estimates/form.html', estimate=est, items=top_items)
 
 
 @bp.route('/search-customer')
@@ -109,15 +111,51 @@ def add_estimate_item(estimate_id):
     est  = Estimate.query.get_or_404(estimate_id)
 
     if data.get('type') == 'bundle':
-        # Legacy bundle-POST path
         bundle = Bundle.query.get_or_404(data['id'])
-        qty    = data.get('quantity', 1)
-        items  = clone_bundle_to_items(bundle, est)
-        for it in items:
-            it.quantity *= qty
+        qty    = int(data.get('quantity', 1))
+        cloned = clone_bundle_to_items(bundle, None)
+        total_cost   = sum(it.unit_price * it.quantity for it in cloned)
+        total_retail = sum(it.retail * it.quantity for it in cloned)
+
+        parent = EstimateItem(
+            estimate_id = estimate_id,
+            type        = 'bundle',
+            object_id   = bundle.id,
+            name        = bundle.name,
+            description = bundle.description,
+            quantity    = qty,
+            unit_price  = total_cost,
+            retail      = total_retail,
+        )
+        db.session.add(parent)
+        db.session.flush()  # obtain parent.id
+
+        items = []
+        for it in cloned:
+            it.estimate_id = estimate_id
+            it.quantity   *= qty
+            it.parent_id   = parent.id
+            items.append(it)
         db.session.add_all(items)
         db.session.commit()
-        return jsonify(success=True, added=[i.id for i in items])
+
+        return jsonify(
+            parent={
+                'id'        : parent.id,
+                'name'      : parent.name,
+                'quantity'  : parent.quantity,
+                'unit_price': parent.unit_price,
+                'retail'    : parent.retail,
+            },
+            items=[{
+                'id'        : i.id,
+                'name'      : i.name,
+                'quantity'  : i.quantity,
+                'unit_price': i.unit_price,
+                'retail'    : i.retail,
+                'parent_id' : i.parent_id
+            } for i in items]
+        )
 
     # Single-product path
     it = EstimateItem(
@@ -129,7 +167,8 @@ def add_estimate_item(estimate_id):
         quantity    = data.get('quantity', 1),
         unit_price  = data.get('unit_price', 0.0),
         retail      = data.get('retail', data.get('unit_price', 0.0)),
-        notes       = data.get('notes', '')
+        notes       = data.get('notes', ''),
+        parent_id   = data.get('parent_id')
     )
     db.session.add(it)
     db.session.commit()
@@ -139,6 +178,9 @@ def add_estimate_item(estimate_id):
 @bp.route('/<int:estimate_id>/remove-item/<int:item_id>', methods=['POST'])
 def remove_estimate_item(estimate_id, item_id):
     it = EstimateItem.query.get_or_404(item_id)
+    # delete children if removing a bundle parent
+    for child in list(it.children):
+        db.session.delete(child)
     db.session.delete(it)
     db.session.commit()
     return jsonify(success=True)
@@ -154,6 +196,38 @@ def update_estimate_item(estimate_id, item_id):
     it.notes      = data.get('notes', it.notes)
     db.session.commit()
     return jsonify(success=True)
+
+
+@bp.route('/<int:estimate_id>/refresh', methods=['POST'])
+def refresh_estimate(estimate_id):
+    """Update line items with current cost from RepairShopr."""
+    est = Estimate.query.get_or_404(estimate_id)
+    updated = []
+    for it in est.items:
+        if it.type != 'product':
+            continue
+        prod = next((p for p in search_products(it.name)
+                     if p.get('name') == it.name), None)
+        if prod:
+            new_cost = prod.get('unit_price', it.unit_price)
+            it.unit_price = new_cost
+            updated.append({
+                'id': it.id,
+                'unit_price': new_cost,
+            })
+    # Recalculate parent bundle lines
+    for parent in [i for i in est.items if i.type == 'bundle']:
+        total_cost   = sum(ch.quantity * ch.unit_price for ch in parent.children)
+        total_retail = sum(ch.quantity * ch.retail for ch in parent.children)
+        parent.unit_price = total_cost
+        parent.retail     = total_retail
+        updated.append({
+            'id': parent.id,
+            'unit_price': parent.unit_price,
+            'retail': parent.retail,
+        })
+    db.session.commit()
+    return jsonify(items=updated)
 
 @bp.route('/<int:estimate_id>/delete', methods=['POST'])
 def delete_estimate(estimate_id):

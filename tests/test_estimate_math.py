@@ -41,3 +41,26 @@ def test_totals_and_markup():
         db.session.commit()
         assert est.total_cost == 5.0
         assert est.total_retail == 8.0
+
+
+def test_bundle_parent_children_totals():
+    app = setup_app()
+    with app.app_context():
+        est = Estimate(customer_id=None, customer_name='Test', customer_address='')
+        db.session.add(est)
+        db.session.commit()
+
+        parent = EstimateItem(estimate_id=est.id, type='bundle', object_id=99,
+                              name='Kit', description='', quantity=1,
+                              unit_price=10.0, retail=15.0)
+        db.session.add(parent)
+        db.session.flush()
+        child = EstimateItem(estimate_id=est.id, type='product', object_id=1,
+                             name='Widget', description='', quantity=2,
+                             unit_price=3.0, retail=5.0, parent_id=parent.id)
+        db.session.add(child)
+        db.session.commit()
+
+        # Only the bundle parent should contribute to totals
+        assert est.total_cost == 10.0
+        assert est.total_retail == 15.0
