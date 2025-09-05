@@ -131,12 +131,14 @@ bsSug.addEventListener('click', async e => {
           data-name="${p.name}"
           data-description="${p.description.replace(/"/g,'&quot;')}"
           data-unit_price="${p.unit_price}"
-          data-retail="${p.retail}">
+          data-retail="${p.retail}"
+          data-stock="${p.stock}">
         <div style="flex:1;">
           <strong>${p.name}</strong><br>
           ${p.description}<br>
           <small>Cost: $${p.unit_price.toFixed(2)}</small><br>
-          <small>Retail: $${p.retail.toFixed(2)}</small>
+          <small>Retail: $${p.retail.toFixed(2)}</small><br>
+          <small>Stock: ${p.stock}</small>
         </div>
         <div class="d-flex align-items-center ms-3">
           <input type="number" class="form-control form-control-sm qty-input"
@@ -193,6 +195,7 @@ bsSug.addEventListener('click', async e => {
       description: li.dataset.description,
       unit_price : parseFloat(li.dataset.unit_price),
       retail     : parseFloat(li.dataset.retail),
+      stock      : parseFloat(li.dataset.stock),
       type       : 'product',
       quantity   : qty
     };
@@ -215,11 +218,11 @@ bsSug.addEventListener('click', async e => {
     const body = document.getElementById('items-body');
 
     if (data.type === 'bundle') {
-      const parentData = { ...payload.parent, type: 'bundle' };
+      const parentData = { ...payload.parent, type: 'bundle', stock: null };
       const parentRow  = buildRow(parentData);
       body.appendChild(parentRow);
       payload.items.forEach(it => {
-        const childData = { ...it, type: 'item' };
+        const childData = { ...it, type: 'product', stock: it.stock };
         const childRow  = buildRow(childData, parentData.id);
         body.appendChild(childRow);
       });
@@ -236,6 +239,8 @@ bsSug.addEventListener('click', async e => {
     tr.classList.add('draggable');
     tr.draggable = true;
     tr.dataset.itemId = data.id;
+    tr.dataset.type = data.type;
+    tr.dataset.qty = data.quantity ?? 1;
     if (parentId) {
       tr.dataset.parentId = parentId;
       tr.classList.add('bundle-item');
@@ -266,6 +271,11 @@ bsSug.addEventListener('click', async e => {
       tr.appendChild(td);
     }
 
+    const stockTd = document.createElement('td');
+    stockTd.className = 'stock-cell';
+    stockTd.textContent = data.type === 'product' ? (data.stock ?? 0) : '--';
+    tr.appendChild(stockTd);
+
     const lineTd = document.createElement('td');
     lineTd.className = 'line-total';
     lineTd.textContent = `$${((data.quantity || 1) * (data.unit_price || 0)).toFixed(2)}`;
@@ -274,8 +284,9 @@ bsSug.addEventListener('click', async e => {
     const actTd = document.createElement('td');
     if (data.type === 'bundle') {
       const toggleBtn = document.createElement('button');
-      toggleBtn.className = 'btn btn-sm btn-link toggle-bundle';
-      toggleBtn.textContent = 'Show/Hide Items';
+      toggleBtn.className = 'btn btn-sm btn-outline-primary toggle-bundle';
+      toggleBtn.innerHTML = '&#128065;';
+      toggleBtn.title = 'Show/Hide Items';
       actTd.appendChild(toggleBtn);
     }
     const remBtn = document.createElement('button');
@@ -284,7 +295,10 @@ bsSug.addEventListener('click', async e => {
     actTd.appendChild(remBtn);
     tr.appendChild(actTd);
 
-    tr.classList.toggle('table-danger', (+data.quantity || 0) === 0);
+    const stockVal = data.type === 'product' ? (+data.stock || 0) : null;
+    tr.classList.toggle('table-danger',
+      (+data.quantity || 0) === 0 || (stockVal !== null && stockVal < (+data.quantity || 0))
+    );
     return tr;
   }
 
@@ -298,7 +312,9 @@ bsSug.addEventListener('click', async e => {
       const r = +row.querySelector('.retail').value || 0;
       const lt = q * c;
       row.querySelector('.line-total').textContent = `$${lt.toFixed(2)}`;
-      row.classList.toggle('table-danger', q === 0);
+      const stockCell = row.querySelector('.stock-cell');
+      const stock = stockCell ? parseFloat(stockCell.textContent) : null;
+      row.classList.toggle('table-danger', q === 0 || (stock !== null && stock < q));
       if (row.dataset.parentId) return; // child rows don't count toward totals
       totalCost   += lt;
       totalRetail += q * r;
@@ -345,24 +361,76 @@ bsSug.addEventListener('click', async e => {
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(payload)
     });
+
+    // If the bundle quantity changed, update child line quantities accordingly
+    if (row.dataset.type === 'bundle' && e.target.classList.contains('qty')) {
+      const oldQty = parseFloat(row.dataset.qty || '1');
+      const newQty = parseFloat(row.querySelector('.qty').value) || 0;
+      if (oldQty > 0) {
+        const ratio = newQty / oldQty;
+        row.dataset.qty = newQty;
+        const children = document.querySelectorAll(`tr[data-parent-id="${id}"]`);
+        for (const child of children) {
+          const qInput = child.querySelector('.qty');
+          const newChildQty = parseFloat(qInput.value) * ratio;
+          qInput.value = newChildQty;
+          await fetch(`/estimates/${estId}/update-item/${child.dataset.itemId}`, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({ quantity: newChildQty })
+          });
+        }
+      }
+    }
+
     recalc();
   });
 
   // --- Drag & drop setup ---
   let draggedRow;
+  let draggedRows = [];
+
   body.addEventListener('dragstart', e => {
     draggedRow = e.target.closest('tr');
+    if (!draggedRow) return;
+    if (!draggedRow.dataset.parentId) {
+      const pid = draggedRow.dataset.itemId;
+      draggedRows = [draggedRow, ...document.querySelectorAll(`tr[data-parent-id="${pid}"]`)];
+    } else {
+      draggedRows = [draggedRow];
+    }
   });
+
+  function getAfterNode(row) {
+    let ref = row.nextSibling;
+    while (ref && ref.dataset.parentId === row.dataset.itemId) {
+      ref = ref.nextSibling;
+    }
+    return ref;
+  }
+
   body.addEventListener('dragover', e => {
     e.preventDefault();
     const target = e.target.closest('tr');
-    if (!target || target === draggedRow) return;
+    if (!target || draggedRows.includes(target)) return;
+    const draggedParent = draggedRows[0].dataset.parentId || null;
+    const targetParent  = target.dataset.parentId || null;
+    if (draggedParent !== targetParent) return;
+
     const rect = target.getBoundingClientRect();
-    const next = (e.clientY - rect.top) / rect.height > 0.5;
-    body.insertBefore(draggedRow, next ? target.nextSibling : target);
+    const after = (e.clientY - rect.top) / rect.height > 0.5;
+    let ref;
+    if (!draggedRow.dataset.parentId) {
+      ref = after ? getAfterNode(target) : target;
+    } else {
+      ref = after ? target.nextSibling : target;
+    }
+    draggedRows.forEach(r => body.insertBefore(r, ref));
   });
+
   body.addEventListener('dragend', () => {
     draggedRow = null;
+    draggedRows = [];
   });
 
   // Initial calculation
