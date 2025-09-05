@@ -58,9 +58,11 @@ def create_app(config_name: str | None = None) -> Flask:
     from app.bundles.routes import bp as bundles_bp
     from app.estimates.routes import bp as estimates_bp
     from app.admin import bp as admin_bp
+    from app.integrations.repairshopr_export import rs_export_cli
 
     app.register_blueprint(bundles_bp, url_prefix='/bundles')
     app.register_blueprint(estimates_bp, url_prefix='/estimates')
     app.register_blueprint(admin_bp, url_prefix='/admin')
+    app.cli.add_command(rs_export_cli)
 
     return app
