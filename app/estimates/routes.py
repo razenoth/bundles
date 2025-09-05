@@ -213,6 +213,19 @@ def update_estimate_item(estimate_id, item_id):
     it.unit_price = data.get('unit_price', it.unit_price)
     it.retail     = data.get('retail', it.retail)
     it.notes      = data.get('notes', it.notes)
+
+    # If this item belongs to a bundle, recalculate the parent bundle's
+    # cost/retail to reflect the updated child items.  Conversely if the
+    # item is itself a bundle parent, recalc using its children.
+    parent = it.parent
+    target = parent if parent else it
+    if parent or it.children:
+        total_cost = sum(ch.quantity * ch.unit_price for ch in target.children)
+        total_ret  = sum(ch.quantity * ch.retail     for ch in target.children)
+        qty = target.quantity or 1
+        target.unit_price = total_cost / qty if qty else 0
+        target.retail     = total_ret  / qty if qty else 0
+
     db.session.commit()
     return jsonify(success=True)
 
