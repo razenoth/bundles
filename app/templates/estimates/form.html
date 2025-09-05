@@ -46,8 +46,8 @@
         <th></th>
         <th>Item</th>
         <th>Description</th>
-        <th>Cost</th>
-        <th>Retail</th>
+        <th>Cost ($)</th>
+        <th>Retail ($)</th>
         <th style="width:80px;">Qty</th>
         <th>Stock</th>
         <th>Total</th>
@@ -59,13 +59,35 @@
         {% for it in items %}
         <tr data-item-id="{{ it.id }}" data-type="{{ it.type }}" data-qty="{{ it.quantity }}" class="draggable{% if it.type=='product' and (it.stock or 0) > 0 and (it.stock or 0) < it.quantity %} table-danger{% endif %}" draggable="true">
           <td>☰</td>
-          <td>{{ it.name }}</td>
-          <td>{{ it.description or '' }}</td>
-          <td><input type="number" class="form-control unit-price" step="0.01" value="{{ it.unit_price }}"{% if it.type=='bundle' %} readonly{% endif %}></td>
-          <td><input type="number" class="form-control retail" step="0.01" value="{{ it.retail }}"{% if it.type=='bundle' %} readonly{% endif %}></td>
+          <td>
+            {% if it.type=='bundle' %}
+            <input type="text" class="form-control item-name" value="{{ it.name }}">
+            {% else %}
+            {{ it.name }}
+            {% endif %}
+          </td>
+          <td>
+            {% if it.type=='bundle' %}
+            <input type="text" class="form-control item-desc" value="{{ it.description or '' }}">
+            {% else %}
+            {{ it.description or '' }}
+            {% endif %}
+          </td>
+          <td>
+            <div class="input-group">
+              <span class="input-group-text">$</span>
+              <input type="number" class="form-control unit-price" step="0.01" value="{{ it.unit_price }}"{% if it.type=='bundle' %} readonly{% endif %}>
+            </div>
+          </td>
+          <td>
+            <div class="input-group">
+              <span class="input-group-text">$</span>
+              <input type="number" class="form-control retail" step="0.01" value="{{ it.retail }}"{% if it.type=='bundle' %} readonly{% endif %}>
+            </div>
+          </td>
           <td><input type="number" class="form-control qty" value="{{ it.quantity }}" min="0" style="width:80px;"></td>
           <td class="stock-cell">{% if it.type=='product' %}{{ it.stock or 0 }}{% else %}--{% endif %}</td>
-          <td class="line-total">{% if it.type=='product' and (it.stock or 0) == 0 %}<strong class="text-danger">!</strong>{% endif %}${{ '%.2f'|format(it.quantity * it.retail) }}</td>
+          <td class="line-total">{% if it.type=='product' and (it.stock or 0) <= 0 %}<strong class="text-danger">!</strong>{% endif %}${{ '%.2f'|format(it.quantity * it.retail) }}</td>
           <td>
             <button class="btn btn-sm btn-danger remove-item">✕</button>
             {% if it.type=='bundle' %}
@@ -79,11 +101,21 @@
           <td>—</td>
           <td class="ps-4">{{ sub.name }}</td>
           <td>{{ sub.description or '' }}</td>
-          <td><input type="number" class="form-control unit-price" step="0.01" value="{{ sub.unit_price }}"></td>
-          <td><input type="number" class="form-control retail" step="0.01" value="{{ sub.retail }}"></td>
+          <td>
+            <div class="input-group">
+              <span class="input-group-text">$</span>
+              <input type="number" class="form-control unit-price" step="0.01" value="{{ sub.unit_price }}">
+            </div>
+          </td>
+          <td>
+            <div class="input-group">
+              <span class="input-group-text">$</span>
+              <input type="number" class="form-control retail" step="0.01" value="{{ sub.retail }}">
+            </div>
+          </td>
           <td><input type="number" class="form-control qty" value="{{ sub.quantity }}" min="0" style="width:80px;"></td>
           <td class="stock-cell">{{ sub.stock or 0 }}</td>
-          <td class="line-total">{% if (sub.stock or 0) == 0 %}<strong class="text-danger">!</strong>{% endif %}${{ '%.2f'|format(sub.quantity * sub.retail) }}</td>
+          <td class="line-total">{% if (sub.stock or 0) <= 0 %}<strong class="text-danger">!</strong>{% endif %}${{ '%.2f'|format(sub.quantity * sub.retail) }}</td>
           <td></td>
         </tr>
         {% endfor %}
