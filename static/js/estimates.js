@@ -314,10 +314,10 @@ bsSug.addEventListener('click', async e => {
     tr.appendChild(stockTd);
 
     const lineTd = document.createElement('td');
-    lineTd.className = 'line-total';
     const noStock = data.type === 'product' && data.stock !== undefined && data.stock <= 0;
+    lineTd.className = 'line-total' + (noStock ? ' bg-danger text-white' : '');
     const lineVal = ((data.quantity || 1) * (data.retail || 0)).toFixed(2);
-    lineTd.innerHTML = `${noStock ? '<strong class="text-danger">!</strong>' : ''}$${lineVal}`;
+    lineTd.textContent = `$${lineVal}`;
     tr.appendChild(lineTd);
 
     const actTd = document.createElement('td');
@@ -376,7 +376,9 @@ bsSug.addEventListener('click', async e => {
       const noStock = stock !== null && !isNaN(stock) && stock <= 0;
       const insufficient = stock !== null && !isNaN(stock) && stock > 0 && stock < q;
       const lineCell = row.querySelector('.line-total');
-      lineCell.innerHTML = `${noStock ? '<strong class="text-danger">!</strong>' : ''}$${ltRetail.toFixed(2)}`;
+      lineCell.textContent = `$${ltRetail.toFixed(2)}`;
+      lineCell.classList.toggle('bg-danger', noStock);
+      lineCell.classList.toggle('text-white', noStock);
       row.classList.toggle('table-danger', insufficient);
       if (row.dataset.parentId) return; // child rows don't count toward totals
       totalCost   += q * c;

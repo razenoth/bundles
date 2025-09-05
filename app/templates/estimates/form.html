@@ -44,7 +44,7 @@
     <thead>
       <tr>
         <th></th>
-        <th>Item</th>
+        <th>Product</th>
         <th>Description</th>
         <th>Cost ($)</th>
         <th>Retail ($)</th>
@@ -87,7 +87,7 @@
           </td>
           <td><input type="number" class="form-control qty" value="{{ it.quantity }}" min="0" style="width:80px;"></td>
           <td class="stock-cell">{% if it.type=='product' %}{{ it.stock or 0 }}{% else %}--{% endif %}</td>
-          <td class="line-total">{% if it.type=='product' and (it.stock or 0) <= 0 %}<strong class="text-danger">!</strong>{% endif %}${{ '%.2f'|format(it.quantity * it.retail) }}</td>
+          <td class="line-total{% if it.type=='product' and (it.stock or 0) <= 0 %} bg-danger text-white{% endif %}">${{ '%.2f'|format(it.quantity * it.retail) }}</td>
           <td>
             <button class="btn btn-sm btn-danger remove-item">✕</button>
             {% if it.type=='bundle' %}
@@ -115,7 +115,7 @@
           </td>
           <td><input type="number" class="form-control qty" value="{{ sub.quantity }}" min="0" style="width:80px;"></td>
           <td class="stock-cell">{{ sub.stock or 0 }}</td>
-          <td class="line-total">{% if (sub.stock or 0) <= 0 %}<strong class="text-danger">!</strong>{% endif %}${{ '%.2f'|format(sub.quantity * sub.retail) }}</td>
+          <td class="line-total{% if (sub.stock or 0) <= 0 %} bg-danger text-white{% endif %}">${{ '%.2f'|format(sub.quantity * sub.retail) }}</td>
           <td></td>
         </tr>
         {% endfor %}
