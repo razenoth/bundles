@@ -213,6 +213,8 @@ def update_estimate_item(estimate_id, item_id):
     it.unit_price = data.get('unit_price', it.unit_price)
     it.retail     = data.get('retail', it.retail)
     it.notes      = data.get('notes', it.notes)
+    it.name       = data.get('name', it.name)
+    it.description= data.get('description', it.description)
 
     # If this item belongs to a bundle, recalculate the parent bundle's
     # cost/retail to reflect the updated child items.  Conversely if the

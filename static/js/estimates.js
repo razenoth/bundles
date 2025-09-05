@@ -252,27 +252,59 @@ bsSug.addEventListener('click', async e => {
     tr.appendChild(dragTd);
 
     const nameTd = document.createElement('td');
-    if (parentId) nameTd.classList.add('ps-4');
-    nameTd.textContent = data.name;
+    if (parentId) {
+      nameTd.classList.add('ps-4');
+      nameTd.textContent = data.name;
+    } else if (data.type === 'bundle') {
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'form-control item-name';
+      inp.value = data.name || '';
+      nameTd.appendChild(inp);
+    } else {
+      nameTd.textContent = data.name;
+    }
     tr.appendChild(nameTd);
 
     const descTd = document.createElement('td');
-    descTd.textContent = data.description || '';
+    if (!parentId && data.type === 'bundle') {
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'form-control item-desc';
+      inp.value = data.description || '';
+      descTd.appendChild(inp);
+    } else {
+      descTd.textContent = data.description || '';
+    }
     tr.appendChild(descTd);
 
     for (let field of ['unit_price', 'retail', 'quantity']) {
-      const td  = document.createElement('td');
-      const inp = document.createElement('input');
-      inp.type      = 'number';
-      inp.step      = (field === 'quantity' ? '1' : '0.01');
-      if (field === 'quantity') inp.min = '0';
-      inp.className = 'form-control ' + (field === 'quantity' ? 'qty' : field.replace('_','-'));
-      inp.value     = data[field] ?? (field === 'quantity' ? 1 : 0);
-      if (field === 'quantity') inp.style.width = '80px';
-      if (data.type === 'bundle' && !parentId && field !== 'quantity') {
-        inp.readOnly = true;
+      const td = document.createElement('td');
+      if (field === 'unit_price' || field === 'retail') {
+        const group = document.createElement('div');
+        group.className = 'input-group';
+        const span = document.createElement('span');
+        span.className = 'input-group-text';
+        span.textContent = '$';
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.step = '0.01';
+        inp.className = 'form-control ' + field.replace('_','-');
+        inp.value = data[field] ?? 0;
+        if (data.type === 'bundle' && !parentId) inp.readOnly = true;
+        group.appendChild(span);
+        group.appendChild(inp);
+        td.appendChild(group);
+      } else {
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.step = '1';
+        inp.min = '0';
+        inp.className = 'form-control qty';
+        inp.value = data[field] ?? 1;
+        inp.style.width = '80px';
+        td.appendChild(inp);
       }
-      td.appendChild(inp);
       tr.appendChild(td);
     }
 
@@ -283,7 +315,7 @@ bsSug.addEventListener('click', async e => {
 
     const lineTd = document.createElement('td');
     lineTd.className = 'line-total';
-    const noStock = data.type === 'product' && data.stock === 0;
+    const noStock = data.type === 'product' && data.stock !== undefined && data.stock <= 0;
     const lineVal = ((data.quantity || 1) * (data.retail || 0)).toFixed(2);
     lineTd.innerHTML = `${noStock ? '<strong class="text-danger">!</strong>' : ''}$${lineVal}`;
     tr.appendChild(lineTd);
@@ -341,8 +373,8 @@ bsSug.addEventListener('click', async e => {
       const ltRetail = q * r;
       const stockCell = row.querySelector('.stock-cell');
       const stock = stockCell ? parseFloat(stockCell.textContent) : null;
-      const noStock = stock !== null && stock === 0;
-      const insufficient = stock !== null && stock > 0 && stock < q;
+      const noStock = stock !== null && !isNaN(stock) && stock <= 0;
+      const insufficient = stock !== null && !isNaN(stock) && stock > 0 && stock < q;
       const lineCell = row.querySelector('.line-total');
       lineCell.innerHTML = `${noStock ? '<strong class="text-danger">!</strong>' : ''}$${ltRetail.toFixed(2)}`;
       row.classList.toggle('table-danger', insufficient);
@@ -379,7 +411,7 @@ bsSug.addEventListener('click', async e => {
     }
   });
   body.addEventListener('change', async e => {
-    if (!e.target.matches('.qty, .unit-price, .retail')) return;
+    if (!e.target.matches('.qty, .unit-price, .retail, .item-name, .item-desc')) return;
     const row = e.target.closest('tr');
     const id  = row.dataset.itemId;
     const payload = {
@@ -387,6 +419,10 @@ bsSug.addEventListener('click', async e => {
       unit_price: +row.querySelector('.unit-price').value,
       retail:     +row.querySelector('.retail').value
     };
+    const nameInp = row.querySelector('.item-name');
+    const descInp = row.querySelector('.item-desc');
+    if (nameInp) payload.name = nameInp.value;
+    if (descInp) payload.description = descInp.value;
     await fetch(`/estimates/${estId}/update-item/${id}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
