@@ -39,11 +39,24 @@ class Estimate(db.Model):
 
     @property
     def total_cost(self):
-        return sum(i.quantity * i.unit_price for i in self.items)
+        """Total cost of visible line items only.
+
+        When a bundle is added to an estimate we store a parent line for the
+        bundle itself and child lines for each product in that bundle.  The
+        child lines allow per‑estimate price customisation but should not be
+        counted again when calculating estimate totals.  Therefore only
+        top‑level items (those without a parent) contribute to the summary
+        figures.
+        """
+        return sum(
+            i.quantity * i.unit_price for i in self.items if i.parent_id is None
+        )
 
     @property
     def total_retail(self):
-        return sum(i.quantity * i.retail for i in self.items)
+        return sum(
+            i.quantity * i.retail for i in self.items if i.parent_id is None
+        )
 
     @property
     def profit(self):
@@ -61,6 +74,13 @@ class EstimateItem(db.Model):
     unit_price   = db.Column(db.Float, default=0.0)
     retail       = db.Column(db.Float, default=0.0)
     notes        = db.Column(db.String(200), default='')
+    parent_id    = db.Column(db.Integer, db.ForeignKey('estimate_item.id'))
+
+    children = db.relationship(
+        'EstimateItem',
+        backref=db.backref('parent', remote_side=[id]),
+        lazy=True
+    )
 
     @property
     def line_total(self):
