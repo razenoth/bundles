@@ -20,12 +20,6 @@ def list_estimates():
     return render_template('estimates/list.html', estimates=ests)
 
 
-@bp.route('/<int:estimate_id>')
-def view_estimate(estimate_id):
-    est = Estimate.query.get_or_404(estimate_id)
-    return render_template('estimates/view.html', estimate=est)
-
-
 @bp.route('/create', methods=['GET'])
 def create_estimate():
     """Auto-create a draft and redirect into its editor."""

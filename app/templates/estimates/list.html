@@ -28,7 +28,6 @@
           <td>${{ '%.2f'|format(est.total_retail) }}</td>
           <td>${{ '%.2f'|format(est.profit) }}</td>
           <td>
-            <a href="{{ url_for('estimates.view_estimate', estimate_id=est.id) }}" class="btn btn-sm btn-info">View</a>
             <a href="{{ url_for('estimates.edit_estimate', estimate_id=est.id) }}" class="btn btn-sm btn-secondary">Edit</a>
             <form method="post" action="{{ url_for('estimates.delete_estimate', estimate_id=est.id) }}" style="display:inline;">
               <button type="submit" class="btn btn-sm btn-danger"

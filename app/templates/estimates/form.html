@@ -50,7 +50,7 @@
         <th>Retail</th>
         <th style="width:80px;">Qty</th>
         <th>Stock</th>
-        <th>Line Total</th>
+        <th>Total</th>
         <th></th>
       </tr>
     </thead>
@@ -65,7 +65,7 @@
           <td><input type="number" class="form-control retail" step="0.01" value="{{ it.retail }}"></td>
           <td><input type="number" class="form-control qty" value="{{ it.quantity }}" style="width:80px;"></td>
           <td class="stock-cell">{% if it.type=='product' %}{{ it.stock or 0 }}{% else %}--{% endif %}</td>
-          <td class="line-total">${{ '%.2f'|format(it.quantity * it.unit_price) }}</td>
+          <td class="line-total">${{ '%.2f'|format(it.quantity * it.retail) }}</td>
           <td>
             <button class="btn btn-sm btn-danger remove-item">✕</button>
             {% if it.type=='bundle' %}
@@ -83,7 +83,7 @@
           <td><input type="number" class="form-control retail" step="0.01" value="{{ sub.retail }}"></td>
           <td><input type="number" class="form-control qty" value="{{ sub.quantity }}" style="width:80px;"></td>
           <td class="stock-cell">{{ sub.stock or 0 }}</td>
-          <td class="line-total">${{ '%.2f'|format(sub.quantity * sub.unit_price) }}</td>
+          <td class="line-total">${{ '%.2f'|format(sub.quantity * sub.retail) }}</td>
           <td></td>
         </tr>
         {% endfor %}
