@@ -279,7 +279,7 @@ bsSug.addEventListener('click', async e => {
 
     const lineTd = document.createElement('td');
     lineTd.className = 'line-total';
-    lineTd.textContent = `$${((data.quantity || 1) * (data.unit_price || 0)).toFixed(2)}`;
+    lineTd.textContent = `$${((data.quantity || 1) * (data.retail || 0)).toFixed(2)}`;
     tr.appendChild(lineTd);
 
     const actTd = document.createElement('td');
@@ -314,14 +314,14 @@ bsSug.addEventListener('click', async e => {
       const q = +row.querySelector('.qty').value || 0;
       const c = +row.querySelector('.unit-price').value || 0;
       const r = +row.querySelector('.retail').value || 0;
-      const lt = q * c;
-      row.querySelector('.line-total').textContent = `$${lt.toFixed(2)}`;
+      const ltRetail = q * r;
+      row.querySelector('.line-total').textContent = `$${ltRetail.toFixed(2)}`;
       const stockCell = row.querySelector('.stock-cell');
       const stock = stockCell ? parseFloat(stockCell.textContent) : null;
       row.classList.toggle('table-danger', q === 0 || (stock !== null && stock < q));
       if (row.dataset.parentId) return; // child rows don't count toward totals
-      totalCost   += lt;
-      totalRetail += q * r;
+      totalCost   += q * c;
+      totalRetail += ltRetail;
     });
     const profit = totalRetail - totalCost;
     const markup = totalCost   > 0 ? (profit / totalCost   * 100) : 0;
