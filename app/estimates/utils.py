@@ -1,31 +1,32 @@
 # app/estimates/utils.py
 
-from app.inventory_store import search_products as _search_products
-from app.repairshopr_client import (
-    fetch_by_barcode,
-    fetch_by_sku,
-    fetch_by_query,
+"""Utility functions for the estimates blueprint."""
+
+from app.api.repairshopr import (
+    search_products as _search_products,
+    search_customers,
 )
-from app.api.repairshopr import search_customers
 from app.models import Bundle, EstimateItem
 
 
-class RemoteFetch:
-    by_barcode = staticmethod(fetch_by_barcode)
-    by_sku = staticmethod(fetch_by_sku)
-    by_query = staticmethod(fetch_by_query)
-
-
 def search_products(q: str, page: int = 1) -> list:
-    rows = _search_products(q, page=page, remote_fetch=RemoteFetch)
+    """Search RepairShopr for products matching ``q``.
+
+    Previously this consulted a local inventory mirror and only fetched from
+    the network when necessary.  To simplify the system and remove the local
+    database dependency we now issue API requests directly for each search.
+    The ``page`` parameter is ignored but kept for backwards compatibility.
+    """
+
+    rows = _search_products(q or "")
     return [
         {
-            'id'         : p['id'],
-            'name'       : p['name'],
-            'description': p['description'],
-            'unit_price' : p['cost'],
-            'retail'     : p['retail'],
-            'type'       : 'product'
+            "id": p.get("id"),
+            "name": p.get("name"),
+            "description": p.get("description"),
+            "unit_price": float(p.get("price_cost", 0.0)),
+            "retail": float(p.get("price_retail", 0.0)),
+            "type": "product",
         }
         for p in rows
     ]
