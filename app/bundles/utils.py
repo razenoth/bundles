@@ -22,6 +22,7 @@ def search_products(q: str, page: int = 1) -> list:
             "description": p.get("description"),
             "cost": float(p.get("price_cost", 0.0)),
             "retail": float(p.get("price_retail", 0.0)),
+            "stock": float(p.get("quantity", 0.0)),
             "type": "product",
         }
         for p in rows

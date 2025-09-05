@@ -55,7 +55,7 @@ def get_products(query):
 def search_products(query):
     """
     Returns a list of dicts with:
-      id, name, description (<=100 chars), price_cost, price_retail
+      id, name, description (<=100 chars), price_cost, price_retail, quantity
     """
     raw = get_products(query) or []
     out = []
@@ -68,7 +68,8 @@ def search_products(query):
             'name':          p.get('name'),
             'description':   desc, 
             'price_cost':    float(p.get('price_cost', 0)),    # cost :contentReference[oaicite:1]{index=1}
-            'price_retail':  float(p.get('price_retail', 0))   # retail :contentReference[oaicite:2]{index=2}
+            'price_retail':  float(p.get('price_retail', 0)),  # retail :contentReference[oaicite:2]{index=2}
+            'quantity':      float(p.get('quantity', 0))
         })
     return out
 
