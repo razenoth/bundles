@@ -1,20 +1,28 @@
 # app/bundles/utils.py
-from app.inventory_store import search_products as _search_products
-from app.repairshopr_client import (
-    fetch_by_barcode,
-    fetch_by_sku,
-    fetch_by_query,
-)
+"""Helpers for bundle-related product search."""
 
-
-class RemoteFetch:
-    """Adapter exposing network fetch helpers."""
-
-    by_barcode = staticmethod(fetch_by_barcode)
-    by_sku = staticmethod(fetch_by_sku)
-    by_query = staticmethod(fetch_by_query)
+from app.api.repairshopr import search_products as _search_products
 
 
 def search_products(q: str, page: int = 1) -> list:
-    rows = _search_products(q, page=page, remote_fetch=RemoteFetch)
-    return [dict(p, type='product') for p in rows]
+    """Search for products via the RepairShopr API.
+
+    The previous implementation queried a local inventory mirror and only
+    contacted the API on cache misses.  This reverts to the simpler behaviour
+    of hitting the API directly for every search.  The ``page`` argument is
+    accepted for compatibility but currently unused as the API endpoint does
+    not support pagination for these lookups.
+    """
+
+    rows = _search_products(q or "")
+    return [
+        {
+            "id": p.get("id"),
+            "name": p.get("name"),
+            "description": p.get("description"),
+            "cost": float(p.get("price_cost", 0.0)),
+            "retail": float(p.get("price_retail", 0.0)),
+            "type": "product",
+        }
+        for p in rows
+    ]
