@@ -48,7 +48,15 @@ def edit_estimate(estimate_id):
         return jsonify(success=True)
 
     top_items = EstimateItem.query.filter_by(estimate_id=est.id, parent_id=None).all()
-    return render_template('estimates/form.html', estimate=est, items=top_items)
+    total_cost   = sum(it.unit_price * it.quantity for it in top_items)
+    total_retail = sum(it.retail * it.quantity for it in top_items)
+    return render_template(
+        'estimates/form.html',
+        estimate=est,
+        items=top_items,
+        total_cost=total_cost,
+        total_retail=total_retail,
+    )
 
 
 @bp.route('/search-customer')
@@ -141,19 +149,21 @@ def add_estimate_item(estimate_id):
 
         return jsonify(
             parent={
-                'id'        : parent.id,
-                'name'      : parent.name,
-                'quantity'  : parent.quantity,
-                'unit_price': parent.unit_price,
-                'retail'    : parent.retail,
+                'id'         : parent.id,
+                'name'       : parent.name,
+                'description': parent.description,
+                'quantity'   : parent.quantity,
+                'unit_price' : parent.unit_price,
+                'retail'     : parent.retail,
             },
             items=[{
-                'id'        : i.id,
-                'name'      : i.name,
-                'quantity'  : i.quantity,
-                'unit_price': i.unit_price,
-                'retail'    : i.retail,
-                'parent_id' : i.parent_id
+                'id'         : i.id,
+                'name'       : i.name,
+                'description': i.description,
+                'quantity'   : i.quantity,
+                'unit_price' : i.unit_price,
+                'retail'     : i.retail,
+                'parent_id'  : i.parent_id
             } for i in items]
         )
 
