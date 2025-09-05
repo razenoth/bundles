@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let debounce;
   let abortCtrl;
   let page = 1;
+  let draggedRow;
 
   function recalcTotals() {
     let totalCost = 0, totalRetail = 0;
@@ -131,13 +132,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const row = document.createElement('tr');
       row.dataset.itemId = item_id;
+      row.draggable = true;
       row.innerHTML = `
         <td><input type="text" name="product_name" class="form-control" value="${name}"></td>
         <td><input type="text" name="description" class="form-control" value="${desc}"></td>
+        <td><div class="input-group"><span class="input-group-text">$</span><input type="text" name="cost" class="form-control" value="${cost.toFixed(2)}"></div></td>
+        <td><div class="input-group"><span class="input-group-text">$</span><input type="text" name="retail" class="form-control" value="${retail.toFixed(2)}"></div></td>
         <td><input type="number" name="quantity" class="form-control" min="0" value="${quantity}"></td>
         <td class="stock-cell">${stock}</td>
-        <td><input type="text" name="cost" class="form-control" value="${cost.toFixed(2)}"></td>
-        <td><input type="text" name="retail" class="form-control" value="${retail.toFixed(2)}"></td>
         <td><button class="btn btn-sm btn-danger remove-item">&times;</button></td>
       `;
       row.classList.toggle('table-danger', stock === 0);
@@ -203,5 +205,22 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       console.error('Update-item error:', err);
     }
+  });
+
+  itemsBody.addEventListener('dragstart', e => {
+    draggedRow = e.target.closest('tr');
+  });
+
+  itemsBody.addEventListener('dragover', e => {
+    e.preventDefault();
+    const target = e.target.closest('tr');
+    if (!target || target === draggedRow) return;
+    const rect = target.getBoundingClientRect();
+    const next = (e.clientY - rect.top) / (rect.height) > 0.5;
+    itemsBody.insertBefore(draggedRow, next ? target.nextSibling : target);
+  });
+
+  itemsBody.addEventListener('dragend', () => {
+    draggedRow = null;
   });
 });
