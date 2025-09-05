@@ -48,7 +48,7 @@
         <th>Description</th>
         <th>Cost</th>
         <th>Retail</th>
-        <th>Qty</th>
+        <th style="width:80px;">Qty</th>
         <th>Stock</th>
         <th>Line Total</th>
         <th></th>
@@ -63,28 +63,28 @@
           <td>{{ it.description or '' }}</td>
           <td><input type="number" class="form-control unit-price" step="0.01" value="{{ it.unit_price }}"></td>
           <td><input type="number" class="form-control retail" step="0.01" value="{{ it.retail }}"></td>
-          <td><input type="number" class="form-control qty" value="{{ it.quantity }}"></td>
+          <td><input type="number" class="form-control qty" value="{{ it.quantity }}" style="width:80px;"></td>
           <td class="stock-cell">{% if it.type=='product' %}{{ it.stock or 0 }}{% else %}--{% endif %}</td>
           <td class="line-total">${{ '%.2f'|format(it.quantity * it.unit_price) }}</td>
           <td>
-            {% if it.type=='bundle' %}
-            <button class="btn btn-sm btn-outline-primary toggle-bundle" title="Show/Hide Items">&#128065;</button>
-            {% endif %}
             <button class="btn btn-sm btn-danger remove-item">✕</button>
+            {% if it.type=='bundle' %}
+            <button class="btn btn-sm btn-outline-primary toggle-bundle ms-1" title="Show/Hide Items">&#128065;</button>
+            {% endif %}
           </td>
         </tr>
         {% if it.type=='bundle' %}
         {% for sub in it.children %}
         <tr data-parent-id="{{ it.id }}" data-type="product" data-qty="{{ sub.quantity }}" class="bundle-item draggable{% if (sub.stock or 0) < sub.quantity %} table-danger{% endif %}" draggable="true">
-          <td>☰</td>
+          <td>—</td>
           <td class="ps-4">{{ sub.name }}</td>
           <td>{{ sub.description or '' }}</td>
           <td><input type="number" class="form-control unit-price" step="0.01" value="{{ sub.unit_price }}"></td>
           <td><input type="number" class="form-control retail" step="0.01" value="{{ sub.retail }}"></td>
-          <td><input type="number" class="form-control qty" value="{{ sub.quantity }}"></td>
+          <td><input type="number" class="form-control qty" value="{{ sub.quantity }}" style="width:80px;"></td>
           <td class="stock-cell">{{ sub.stock or 0 }}</td>
           <td class="line-total">${{ '%.2f'|format(sub.quantity * sub.unit_price) }}</td>
-          <td><button class="btn btn-sm btn-danger remove-item">✕</button></td>
+          <td></td>
         </tr>
         {% endfor %}
         {% endif %}
