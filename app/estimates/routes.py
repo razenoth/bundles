@@ -47,6 +47,14 @@ def edit_estimate(estimate_id):
         db.session.commit()
         return jsonify(success=True)
 
+    # Lookup stock levels for each product line so the template can highlight
+    # out-of-stock items.
+    for it in est.items:
+        if it.type == 'product':
+            prod = next((p for p in search_products(it.name)
+                         if p.get('name') == it.name), None)
+            it.stock = prod.get('stock', 0) if prod else 0
+
     top_items = EstimateItem.query.filter_by(estimate_id=est.id, parent_id=None).all()
     total_cost   = sum(it.unit_price * it.quantity for it in top_items)
     total_retail = sum(it.retail * it.quantity for it in top_items)
@@ -139,12 +147,27 @@ def add_estimate_item(estimate_id):
         db.session.flush()  # obtain parent.id
 
         items = []
+        serialized = []
         for it in cloned:
             it.estimate_id = estimate_id
             it.quantity   *= qty
             it.parent_id   = parent.id
+            db.session.add(it)
+            db.session.flush()
             items.append(it)
-        db.session.add_all(items)
+            prod = next((p for p in search_products(it.name)
+                         if p.get('name') == it.name), None)
+            stock = prod.get('stock', 0) if prod else 0
+            serialized.append({
+                'id'         : it.id,
+                'name'       : it.name,
+                'description': it.description,
+                'quantity'   : it.quantity,
+                'unit_price' : it.unit_price,
+                'retail'     : it.retail,
+                'parent_id'  : it.parent_id,
+                'stock'      : stock,
+            })
         db.session.commit()
 
         return jsonify(
@@ -156,15 +179,7 @@ def add_estimate_item(estimate_id):
                 'unit_price' : parent.unit_price,
                 'retail'     : parent.retail,
             },
-            items=[{
-                'id'         : i.id,
-                'name'       : i.name,
-                'description': i.description,
-                'quantity'   : i.quantity,
-                'unit_price' : i.unit_price,
-                'retail'     : i.retail,
-                'parent_id'  : i.parent_id
-            } for i in items]
+            items=serialized
         )
 
     # Single-product path
