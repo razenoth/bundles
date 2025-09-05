@@ -248,7 +248,7 @@ bsSug.addEventListener('click', async e => {
 
     const dragTd = document.createElement('td');
     dragTd.className = 'drag-handle';
-    dragTd.textContent = '☰';
+    dragTd.textContent = parentId ? '—' : '☰';
     tr.appendChild(dragTd);
 
     const nameTd = document.createElement('td');
@@ -267,6 +267,7 @@ bsSug.addEventListener('click', async e => {
       inp.step      = (field === 'quantity' ? '1' : '0.01');
       inp.className = 'form-control ' + (field === 'quantity' ? 'qty' : field.replace('_','-'));
       inp.value     = data[field] ?? (field === 'quantity' ? 1 : 0);
+      if (field === 'quantity') inp.style.width = '80px';
       td.appendChild(inp);
       tr.appendChild(td);
     }
@@ -282,17 +283,20 @@ bsSug.addEventListener('click', async e => {
     tr.appendChild(lineTd);
 
     const actTd = document.createElement('td');
+    if (!parentId) {
+      const remBtn = document.createElement('button');
+      remBtn.className = 'btn btn-sm btn-danger remove-item';
+      remBtn.textContent = '✕';
+      actTd.appendChild(remBtn);
+    }
     if (data.type === 'bundle') {
       const toggleBtn = document.createElement('button');
       toggleBtn.className = 'btn btn-sm btn-outline-primary toggle-bundle';
       toggleBtn.innerHTML = '&#128065;';
       toggleBtn.title = 'Show/Hide Items';
+      if (!parentId) toggleBtn.classList.add('ms-1');
       actTd.appendChild(toggleBtn);
     }
-    const remBtn = document.createElement('button');
-    remBtn.className = 'btn btn-sm btn-danger remove-item';
-    remBtn.textContent = '✕';
-    actTd.appendChild(remBtn);
     tr.appendChild(actTd);
 
     const stockVal = data.type === 'product' ? (+data.stock || 0) : null;
