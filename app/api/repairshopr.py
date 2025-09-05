@@ -106,3 +106,53 @@ def get_customer(customer_id):
     except RequestException as e:
         print(f"⚠️ RepairShopr network error: {e}")
     return None
+
+
+def get_last_estimate():
+    """Return the most recently created estimate from RepairShopr."""
+    headers = {
+        'Authorization': f'Bearer {API_KEY}',
+        'Accept': 'application/json'
+    }
+    try:
+        resp = requests.get(
+            f"{API_URL}/estimates",
+            params={'per_page': 1, 'sort': 'id DESC'},
+            headers=headers,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        ests = payload.get('estimates') or payload.get('data') or []
+        return ests[0] if ests else None
+    except HTTPError as e:
+        print(f"⚠️ RepairShopr API error ({e.response.status_code}): {e}")
+    except RequestException as e:
+        print(f"⚠️ RepairShopr network error: {e}")
+    return None
+
+
+def create_estimate(customer_id, line_items, number=None):
+    """Create a new estimate with ``line_items`` in RepairShopr."""
+    headers = {
+        'Authorization': f'Bearer {API_KEY}',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+    }
+    payload = {
+        'estimate': {
+            'customer_id': customer_id,
+            'line_items_attributes': line_items,
+        }
+    }
+    if number is not None:
+        payload['estimate']['number'] = number
+    try:
+        resp = requests.post(f"{API_URL}/estimates", headers=headers, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get('estimate', data)
+    except HTTPError as e:
+        print(f"⚠️ RepairShopr API error ({e.response.status_code}): {e}")
+    except RequestException as e:
+        print(f"⚠️ RepairShopr network error: {e}")
+    return None

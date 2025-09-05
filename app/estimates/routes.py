@@ -9,6 +9,7 @@ from app.estimates.utils import (
     clone_bundle_to_items,
     search_bundles,
 )
+from app.api import repairshopr as rs_api
 
 # No more template_folder; use the app's templates/estimates directory
 bp = Blueprint('estimates', __name__, url_prefix='/estimates')
@@ -262,6 +263,33 @@ def refresh_estimate(estimate_id):
         })
     db.session.commit()
     return jsonify(items=updated)
+
+
+@bp.route('/<int:estimate_id>/push', methods=['POST'])
+def push_estimate(estimate_id):
+    est = Estimate.query.get_or_404(estimate_id)
+    if not est.customer_id:
+        return jsonify(error='Customer required'), 400
+    last = rs_api.get_last_estimate()
+    next_number = None
+    if last:
+        try:
+            next_number = int(last.get('number', 0)) + 1
+        except (TypeError, ValueError):
+            next_number = None
+    line_items = []
+    for it in est.items:
+        if it.type != 'product':
+            continue
+        line_items.append({
+            'name': it.name,
+            'quantity': it.quantity,
+            'price': it.retail,
+            'cost': it.unit_price,
+            'product_id': it.object_id,
+        })
+    created = rs_api.create_estimate(est.customer_id, line_items, number=next_number)
+    return jsonify(estimate=created or {})
 
 @bp.route('/<int:estimate_id>/delete', methods=['POST'])
 def delete_estimate(estimate_id):
