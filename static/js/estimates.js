@@ -265,9 +265,13 @@ bsSug.addEventListener('click', async e => {
       const inp = document.createElement('input');
       inp.type      = 'number';
       inp.step      = (field === 'quantity' ? '1' : '0.01');
+      if (field === 'quantity') inp.min = '0';
       inp.className = 'form-control ' + (field === 'quantity' ? 'qty' : field.replace('_','-'));
       inp.value     = data[field] ?? (field === 'quantity' ? 1 : 0);
       if (field === 'quantity') inp.style.width = '80px';
+      if (data.type === 'bundle' && !parentId && field !== 'quantity') {
+        inp.readOnly = true;
+      }
       td.appendChild(inp);
       tr.appendChild(td);
     }
@@ -279,7 +283,9 @@ bsSug.addEventListener('click', async e => {
 
     const lineTd = document.createElement('td');
     lineTd.className = 'line-total';
-    lineTd.textContent = `$${((data.quantity || 1) * (data.retail || 0)).toFixed(2)}`;
+    const noStock = data.type === 'product' && data.stock === 0;
+    const lineVal = ((data.quantity || 1) * (data.retail || 0)).toFixed(2);
+    lineTd.innerHTML = `${noStock ? '<strong class="text-danger">!</strong>' : ''}$${lineVal}`;
     tr.appendChild(lineTd);
 
     const actTd = document.createElement('td');
@@ -299,15 +305,33 @@ bsSug.addEventListener('click', async e => {
     }
     tr.appendChild(actTd);
 
-    const stockVal = data.type === 'product' ? (+data.stock || 0) : null;
+    const stockVal = data.type === 'product' ? (data.stock ?? null) : null;
+    const qtyVal = (+data.quantity || 0);
     tr.classList.toggle('table-danger',
-      (+data.quantity || 0) === 0 || (stockVal !== null && stockVal < (+data.quantity || 0))
+      stockVal !== null && stockVal > 0 && stockVal < qtyVal
     );
     return tr;
   }
 
   // --- Recalculate totals ---
   function recalc() {
+    // First recalc bundle parent prices from their children
+    document.querySelectorAll('#items-body tr[data-type="bundle"]').forEach(parent => {
+      if (parent.dataset.parentId) return;
+      const pid = parent.dataset.itemId;
+      let cost = 0, retail = 0;
+      document.querySelectorAll(`#items-body tr[data-parent-id="${pid}"]`).forEach(ch => {
+        const q = +ch.querySelector('.qty').value || 0;
+        const c = +ch.querySelector('.unit-price').value || 0;
+        const r = +ch.querySelector('.retail').value || 0;
+        cost   += q * c;
+        retail += q * r;
+      });
+      const bundleQty = +parent.querySelector('.qty').value || 0;
+      parent.querySelector('.unit-price').value = bundleQty ? (cost / bundleQty).toFixed(2) : '0.00';
+      parent.querySelector('.retail').value     = bundleQty ? (retail / bundleQty).toFixed(2) : '0.00';
+    });
+
     let totalCost   = 0;
     let totalRetail = 0;
     document.querySelectorAll('#items-body tr').forEach(row => {
@@ -315,10 +339,13 @@ bsSug.addEventListener('click', async e => {
       const c = +row.querySelector('.unit-price').value || 0;
       const r = +row.querySelector('.retail').value || 0;
       const ltRetail = q * r;
-      row.querySelector('.line-total').textContent = `$${ltRetail.toFixed(2)}`;
       const stockCell = row.querySelector('.stock-cell');
       const stock = stockCell ? parseFloat(stockCell.textContent) : null;
-      row.classList.toggle('table-danger', q === 0 || (stock !== null && stock < q));
+      const noStock = stock !== null && stock === 0;
+      const insufficient = stock !== null && stock > 0 && stock < q;
+      const lineCell = row.querySelector('.line-total');
+      lineCell.innerHTML = `${noStock ? '<strong class="text-danger">!</strong>' : ''}$${ltRetail.toFixed(2)}`;
+      row.classList.toggle('table-danger', insufficient);
       if (row.dataset.parentId) return; // child rows don't count toward totals
       totalCost   += q * c;
       totalRetail += ltRetail;
