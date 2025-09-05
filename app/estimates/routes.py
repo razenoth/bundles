@@ -108,7 +108,7 @@ def clone_bundle_endpoint(bundle_id):
 @bp.route('/<int:estimate_id>/add-item', methods=['POST'])
 def add_estimate_item(estimate_id):
     data = request.get_json()
-    est  = Estimate.query.get_or_404(estimate_id)
+    Estimate.query.get_or_404(estimate_id)
 
     if data.get('type') == 'bundle':
         bundle = Bundle.query.get_or_404(data['id'])

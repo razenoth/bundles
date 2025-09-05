@@ -1,8 +1,6 @@
 import os
 import time
 
-import pytest
-
 from app.integrations import repairshopr_export as rs
 
 

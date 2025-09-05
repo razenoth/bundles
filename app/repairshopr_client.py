@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from app.integrations.repairshopr_export import RepairShoprClient, TokenBucket, bucket
+from app.integrations.repairshopr_export import RepairShoprClient
 
 client = RepairShoprClient()
 

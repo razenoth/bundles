@@ -10,7 +10,6 @@ from typing import Any, Dict, Generator, Iterable, Optional, Tuple
 
 import click
 import requests
-from flask import current_app
 
 from app import db
 
@@ -78,7 +77,7 @@ class RepairShoprClient:
             bucket.acquire(tokens)
             try:
                 r = self.session.get(url, params=params, timeout=self.timeout)
-            except requests.RequestException as e:  # network issue
+            except requests.RequestException:  # network issue
                 tries += 1
                 if tries > 3:
                     raise

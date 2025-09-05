@@ -86,12 +86,12 @@ def clone_bundle_to_items(bundle, estimate) -> list:
         clones.append(EstimateItem(
             estimate_id = (estimate.id if estimate else None),
             type        = 'product',
-            object_id   = bi.object_id,
-            name        = bi.name,
+            object_id   = bi.id,  # reference original BundleItem
+            name        = bi.product_name,
             description = bi.description,
             quantity    = bi.quantity,
             unit_price  = bi.unit_price,
             retail      = bi.retail,
-            notes       = bi.notes or ''
+            notes       = ''
         ))
     return clones
