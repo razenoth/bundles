@@ -16,6 +16,7 @@
               class="form-control">{{ bundle.description }}</textarea>
   </div>
   <button type="submit" class="btn btn-primary">Save Bundle</button>
+  <button type="button" id="update-bundle" class="btn btn-secondary ms-2">Update Bundle</button>
 </form>
 
 <div class="mb-4 position-relative">
@@ -32,6 +33,7 @@
       <th style="width:25%">Product</th>
       <th style="width:45%">Description</th>
       <th style="width:10%">Qty</th>
+      <th style="width:10%">Stock</th>
       <th style="width:10%">Cost</th>
       <th style="width:10%">Retail</th>
       <th style="width:10%">Actions</th>
@@ -39,7 +41,7 @@
   </thead>
   <tbody id="bundle-items" data-bundle-id="{{ bundle.id }}">
     {% for item in bundle.items %}
-    <tr data-item-id="{{ item.id }}">
+    <tr data-item-id="{{ item.id }}" class="{% if item.stock == 0 %}table-danger{% endif %}">
       <td>
         <input type="text" name="product_name" class="form-control"
                value="{{ item.product_name }}">
@@ -52,6 +54,7 @@
         <input type="number" name="quantity" class="form-control"
                min="0" value="{{ item.quantity }}">
       </td>
+      <td class="stock-cell">{{ item.stock }}</td>
       <td>
         <input type="text" name="cost" class="form-control"
                value="{{ "{:.2f}".format(item.unit_price) }}">

@@ -48,7 +48,12 @@ def edit_bundle(bundle_id):
             flash('Bundle updated', 'success')
         return redirect(url_for('bundles.edit_bundle', bundle_id=bundle.id))
 
-    # GET: render edit page with totals
+    # GET: render edit page with totals and current stock levels
+    for it in bundle.items:
+        prod = next((p for p in search_products(it.product_name)
+                     if p.get('name') == it.product_name), None)
+        it.stock = prod.get('stock', 0) if prod else 0
+
     total_cost   = sum(i.unit_price * i.quantity   for i in bundle.items)
     total_retail = sum(i.retail * i.quantity for i in bundle.items)
     return render_template(
@@ -122,6 +127,26 @@ def update_bundle_item(bundle_id, item_id):
     it.product_name = data.get('product_name', it.product_name)
     db.session.commit()
     return jsonify(success=True)
+
+
+@bp.route('/<int:bundle_id>/refresh', methods=['POST'])
+def refresh_bundle(bundle_id):
+    """Update bundle items with current cost and stock from RepairShopr."""
+    bundle = Bundle.query.get_or_404(bundle_id)
+    updated = []
+    for it in bundle.items:
+        prod = next((p for p in search_products(it.product_name)
+                     if p.get('name') == it.product_name), None)
+        if prod:
+            new_cost = prod.get('cost', it.unit_price)
+            it.unit_price = new_cost
+            updated.append({
+                'id': it.id,
+                'cost': new_cost,
+                'stock': prod.get('stock', 0)
+            })
+    db.session.commit()
+    return jsonify(items=updated)
 
 @bp.route('/search-bundles')
 def search_bundles():

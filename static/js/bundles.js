@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const resultsList = document.getElementById('search-results');
   const itemsBody   = document.getElementById('bundle-items');
   const bundleId    = itemsBody.dataset.bundleId;
+  const updateBtn   = document.getElementById('update-bundle');
 
   let debounce;
   let abortCtrl;
@@ -43,12 +44,14 @@ document.addEventListener('DOMContentLoaded', () => {
           data-name="${p.name.replace(/"/g,'&quot;')}"
           data-description="${p.description.replace(/"/g,'&quot;')}"
           data-cost="${p.cost}"
-          data-retail="${p.retail}">
+          data-retail="${p.retail}"
+          data-stock="${p.stock}">
         <div style="flex:1;">
           <strong>${p.name}</strong><br>
           ${p.description}<br>
           <small>Cost: $${p.cost.toFixed(2)}</small><br>
-          <small>Retail: $${p.retail.toFixed(2)}</small>
+          <small>Retail: $${p.retail.toFixed(2)}</small><br>
+          <small>Stock: ${p.stock}</small>
         </div>
         <div class="d-flex align-items-center ms-3">
           <input type="number" class="form-control form-control-sm qty-input"
@@ -113,6 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const desc    = li.dataset.description;
     const cost    = parseFloat(li.dataset.cost);
     const retail  = parseFloat(li.dataset.retail);
+    const stock   = parseFloat(li.dataset.stock);
     const qtyInp  = li.querySelector('.qty-input');
     const quantity= parseInt(qtyInp.value, 10) || 1;
 
@@ -131,10 +135,12 @@ document.addEventListener('DOMContentLoaded', () => {
         <td><input type="text" name="product_name" class="form-control" value="${name}"></td>
         <td><input type="text" name="description" class="form-control" value="${desc}"></td>
         <td><input type="number" name="quantity" class="form-control" min="0" value="${quantity}"></td>
+        <td class="stock-cell">${stock}</td>
         <td><input type="text" name="cost" class="form-control" value="${cost.toFixed(2)}"></td>
         <td><input type="text" name="retail" class="form-control" value="${retail.toFixed(2)}"></td>
         <td><button class="btn btn-sm btn-danger remove-item">&times;</button></td>
       `;
+      row.classList.toggle('table-danger', stock === 0);
       itemsBody.appendChild(row);
       recalcTotals();
       resultsList.innerHTML = '';
@@ -157,6 +163,25 @@ document.addEventListener('DOMContentLoaded', () => {
       recalcTotals();
     } catch (err) {
       console.error('Remove-item error:', err);
+    }
+  });
+
+  updateBtn.addEventListener('click', async () => {
+    try {
+      const res = await fetch(`/bundles/${bundleId}/refresh`, { method: 'POST' });
+      if (!res.ok) throw new Error(await res.text());
+      const { items } = await res.json();
+      items.forEach(it => {
+        const row = itemsBody.querySelector(`tr[data-item-id="${it.id}"]`);
+        if (!row) return;
+        row.querySelector('input[name="cost"]').value = parseFloat(it.cost).toFixed(2);
+        const stockCell = row.querySelector('.stock-cell');
+        stockCell.textContent = it.stock;
+        row.classList.toggle('table-danger', it.stock === 0);
+      });
+      recalcTotals();
+    } catch (err) {
+      console.error('Refresh error:', err);
     }
   });
 
